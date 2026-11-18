@@ -1,0 +1,1331 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Packet Loss Recovery Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one column of sections. Hero, then a live Mininet-style lab,
+   then mechanisms, a before/after comparison, reproduction code and the rubric map. */
+:root {
+  --bg: #0D1117; --panel: #151B25; --panel2: #1B2330; --line: #2A3445;
+  --ink: #E8EDF5; --muted: #8A97AB;
+  --accent: #FFB547; --ok: #4FD1A5; --bad: #FF6B6B; --info: #7FB2FF; --alt: #B594FF;
+  --display: "Space Grotesk", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--body); font-size: 15px; line-height: 1.6;
+  padding-block: 0 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background-image: radial-gradient(900px 400px at 100% -10%, rgba(255,181,71,.10), transparent 70%);
+  background-repeat: no-repeat;
+}
+.wrap { max-width: 1180px; margin: 0 auto; min-width: 0; }
+section { padding-top: 56px; min-width: 0; }
+h1, h2, h3 { font-family: var(--display); margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: clamp(24px, 3.4vw, 34px); font-weight: 700; text-wrap: balance; }
+h3 { font-size: 17px; font-weight: 700; }
+p { margin: 0; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.lede { color: var(--muted); max-width: 66ch; margin-top: 10px; }
+.muted { color: var(--muted); }
+code, .mono { font-family: var(--mono); font-size: 12.5px; }
+code { background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; overflow-wrap: anywhere; }
+.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* Top nav */
+.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px))); padding-inline: max(16px, env(safe-area-inset-left, 0px)); }
+.nav-in { max-width: 1180px; margin: 0 auto; display: flex; gap: 4px; overflow-x: auto; padding-block: 8px; }
+.nav a { flex: none; color: var(--muted); text-decoration: none; font-size: 13px; padding: 6px 10px; border-radius: 6px; }
+.nav a:hover { color: var(--ink); background: var(--panel); }
+.nav a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Hero */
+.hero { padding-top: 48px; display: grid; gap: 22px; }
+.hero h1 { font-size: clamp(40px, 7.4vw, 84px); line-height: .98; font-weight: 700; text-wrap: balance; letter-spacing: -0.03em; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.hero-facts div { padding: 14px 16px 14px 0; min-width: 0; }
+.hero-facts div + div { border-left: 1px solid var(--line); padding-left: 16px; }
+.hero-facts b { display: block; font-family: var(--display); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hero-facts span { font-size: 12px; color: var(--muted); }
+
+/* Cards and buttons */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; min-width: 0; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: minmax(0, 1fr); } }
+.hint { font-size: 13px; color: var(--muted); margin-top: 4px; }
+button, input, select {
+  font: inherit; font-size: 13px; color: var(--ink); background: var(--panel2);
+  border: 1px solid var(--line); border-radius: 8px; min-height: 34px;
+}
+button { padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+button:hover { border-color: var(--accent); color: var(--accent); }
+button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+button.danger:hover { border-color: var(--bad); color: var(--bad); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; min-height: 34px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.sep { width: 1px; height: 22px; background: var(--line); margin-inline: 4px; }
+.slider-row { display: grid; grid-template-columns: auto minmax(0, 1fr) 52px; gap: 10px; align-items: center; font-size: 13px; margin-top: 10px; }
+.slider-row input[type=range] { width: 100%; accent-color: var(--accent); padding: 0; min-height: 0; background: none; border: 0; }
+.slider-row output { font-family: var(--mono); text-align: right; color: var(--accent); }
+
+/* Lab */
+.lab-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+@media (max-width: 720px) { .lab-top { grid-template-columns: minmax(0, 1fr); } }
+.clockline { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.clockline b { color: var(--ink); font-weight: 600; }
+.banner { margin-top: 14px; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); font-size: 13px; font-family: var(--mono); }
+.banner.open { border-color: var(--bad); color: var(--bad); }
+.banner.ok { border-color: var(--ok); color: var(--ok); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px; margin-top: 14px; }
+.kpi { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.kpi .l { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.kpi .v { font-family: var(--mono); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kpi .v small { font-size: 12px; color: var(--muted); font-weight: 400; }
+
+.lab-main { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
+@media (max-width: 960px) { .lab-main { grid-template-columns: minmax(0, 1fr); } }
+.topo-box { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.topo-box svg { display: block; width: 100%; height: auto; max-width: 100%; }
+.lk { stroke: var(--line); stroke-width: 2; transition: stroke .2s, stroke-width .2s; }
+.lk.P, .lk.A { stroke-width: 3; stroke: var(--ok); }
+.lk.P.lossy, .lk.A.lossy { stroke: var(--accent); }
+.lk.P.down, .lk.A.down { stroke: var(--bad); stroke-dasharray: 2 6; }
+.lk.act { stroke-width: 6; }
+.lk.c { stroke: var(--alt); stroke-dasharray: 4 5; opacity: .55; stroke-width: 1.5; }
+.node circle { fill: var(--panel2); stroke: var(--line); stroke-width: 2; }
+.node.host circle { stroke: var(--info); }
+.node.ctl circle { stroke: var(--alt); }
+.node.sw circle { stroke: var(--ink); }
+.node.hot circle { stroke: var(--accent); }
+.node text { fill: var(--ink); font-family: var(--mono); font-size: 12px; text-anchor: middle; }
+.node .sub { fill: var(--muted); font-size: 10px; }
+.lbl { fill: var(--muted); font-family: var(--mono); font-size: 11px; }
+.pk { stroke: var(--bg); stroke-width: 1.5; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 10px; }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+/* Sequence grid */
+.seqgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 5px; margin-top: 12px; }
+.sq { font-family: var(--mono); font-size: 11px; text-align: center; padding: 5px 0; border-radius: 5px; border: 1px solid var(--line); color: var(--muted); font-variant-numeric: tabular-nums; }
+.sq.ok { background: color-mix(in srgb, var(--ok) 22%, transparent); border-color: var(--ok); color: var(--ink); }
+.sq.retx { background: color-mix(in srgb, var(--alt) 30%, transparent); border-color: var(--alt); color: var(--ink); }
+.sq.miss { background: color-mix(in srgb, var(--bad) 28%, transparent); border-color: var(--bad); color: var(--ink); }
+.sq.fail { background: var(--bad); border-color: var(--bad); color: var(--bg); font-weight: 600; }
+.sq.fly { border-style: dashed; }
+.legend .sw { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--line); display: inline-block; }
+
+/* Path monitor */
+.pathrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; margin-top: 12px; font-size: 13px; }
+.pathrow .bar { grid-column: 1 / -1; height: 8px; background: var(--panel2); border-radius: 999px; overflow: hidden; border: 1px solid var(--line); }
+.pathrow .bar b { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s; }
+.probes { display: flex; gap: 4px; }
+.probes i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.probes i.up { background: var(--ok); }
+.probes i.dn { background: var(--bad); }
+canvas.chart { display: block; width: 100%; height: 190px; }
+
+/* Log and tables */
+.log { display: grid; gap: 3px; max-height: 280px; overflow-y: auto; font-family: var(--mono); font-size: 12px; line-height: 1.5; }
+.log div { overflow-wrap: anywhere; }
+.log .ts { color: var(--muted); }
+.log .ok { color: var(--ok); } .log .warn { color: var(--accent); } .log .bad { color: var(--bad); }
+.table-wrap { overflow-x: auto; max-width: 100%; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+td.muted { color: var(--muted); }
+tr.group td { background: var(--panel2); font-weight: 600; }
+
+/* Mechanism cards */
+.mech { display: grid; gap: 10px; align-content: start; }
+.mech .tag { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: .08em; text-transform: uppercase; }
+.mech ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+.mech li + li { margin-top: 4px; }
+.mech .spec { font-family: var(--mono); font-size: 12px; color: var(--ink); background: var(--panel2); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }
+
+/* Comparison bars */
+.cmp-bars { display: grid; gap: 12px; }
+.cb { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 64px; gap: 10px; align-items: center; font-size: 13px; }
+.cb .t { height: 14px; background: var(--panel2); border-radius: 4px; overflow: hidden; border: 1px solid var(--line); }
+.cb .t b { display: block; height: 100%; width: 0; transition: width .5s ease; }
+.cb .n { font-family: var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 600px) { .cb { grid-template-columns: minmax(0, 1fr) 60px; } .cb .lab { grid-column: 1 / -1; } }
+.delta { font-family: var(--mono); font-size: 12px; color: var(--ok); }
+
+/* Steps and code */
+.steps { counter-reset: st; display: grid; gap: 12px; }
+.steps li { list-style: none; position: relative; padding-left: 0; }
+.codebox { position: relative; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.codebox .hd { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.codebox pre { margin: 0; padding: 12px; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; color: var(--ink); }
+.codebox button { min-height: 26px; padding: 2px 10px; font-size: 12px; }
+.codegrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .codegrid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Rubric */
+.rub-table td.m { text-align: center; font-family: var(--mono); }
+.rub-table td.d { font-weight: 600; white-space: nowrap; }
+.chk { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; cursor: pointer; }
+.chk input { width: 18px; height: 18px; min-height: 0; accent-color: var(--ok); margin-top: 3px; }
+.chk.on span b { color: var(--ok); }
+.chk small { display: block; color: var(--muted); font-size: 12.5px; }
+
+details.qa { border-bottom: 1px solid var(--line); padding: 12px 0; }
+details.qa summary { cursor: pointer; font-family: var(--display); font-size: 16px; font-weight: 500; list-style: none; }
+details.qa summary::-webkit-details-marker { display: none; }
+details.qa summary::before { content: "+ "; color: var(--accent); font-family: var(--mono); }
+details.qa[open] summary::before { content: "− "; }
+details.qa p { color: var(--muted); margin-top: 8px; max-width: 72ch; }
+
+.foot { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header class="hero" id="top">
+    <div class="eyebrow">Computer Networks · SDN + UDP · Packet loss detection and recovery</div>
+    <h1>Lose a packet, <em>find it</em>, route around the fault.</h1>
+    <p class="lede">A UDP application numbers every datagram, spots the holes in the sequence, asks for the missing ones again, and an SDN controller moves traffic to a second path when the first one degrades. This page explains each part, runs the whole loop live, and measures how fast it recovers compared with a static network.</p>
+    <div class="hero-facts">
+      <div><b>4</b><span>Mininet switches, two disjoint paths</span></div>
+      <div><b>0.5 s</b><span>controller probe interval</span></div>
+      <div><b id="hf-rec">–</b><span>median recovery to alternate path</span></div>
+      <div><b>40</b><span>marks in the project rubric</span></div>
+    </div>
+    <nav class="nav" aria-label="Sections">
+      <div class="nav-in">
+        <a href="#lab">Live lab</a>
+        <a href="#mechanisms">Mechanisms</a>
+        <a href="#compare">Before vs after</a>
+        <a href="#recovery">Recovery time</a>
+        <a href="#reproduce">Reproduce</a>
+        <a href="#rubric">Rubric map</a>
+        <a href="#viva">Common Questions</a>
+      </div>
+    </nav>
+  </header>
+
+  <!-- ============ LIVE LAB ============ -->
+  <section id="lab" aria-labelledby="lab-h">
+    <div class="eyebrow">01 · Live lab</div>
+    <h2 id="lab-h">Watch a fault happen and get repaired</h2>
+    <p class="lede">The sender (h1) streams 8 datagrams a second to the receiver (h2). Packets travel over the primary path s1-s2-s4 or the alternate s1-s3-s4. Inject loss or break a link and watch the receiver detect gaps, the sender retransmit, and the controller switch the path.</p>
+
+    <div class="card" style="margin-top:18px">
+      <div class="lab-top">
+        <div>
+          <h3>Network</h3>
+          <p class="hint">Green links are healthy, amber are lossy, dashed red are down. The bright link is the path the ingress rule currently uses.</p>
+        </div>
+        <div class="clockline">sim time <b id="clk">0.0</b> s · speed <b id="spd-lbl">1×</b></div>
+      </div>
+
+      <div class="topo-box" style="margin-top:12px">
+        <svg id="topo" viewBox="0 0 760 290" role="img" aria-label="Topology: h1 sender, s1 ingress switch, primary path through s2, alternate path through s3, s4 egress switch, h2 receiver, controller c0 connected to all switches"></svg>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--ok)"></i>DATA</span>
+        <span><i style="background:var(--accent)"></i>DATA on lossy link</span>
+        <span><i style="background:var(--alt)"></i>retransmission</span>
+        <span><i style="background:var(--info)"></i>ACK</span>
+        <span><i style="background:var(--bad)"></i>NACK / dropped</span>
+        <span><i style="background:var(--muted)"></i>control (FLOW_MOD, STATS, PORT_STATUS)</span>
+      </div>
+
+      <div id="banner" class="banner">No active incident.</div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="l">Sent</div><div class="v" id="k-sent">0</div></div>
+        <div class="kpi"><div class="l">Delivered</div><div class="v" id="k-del">0</div></div>
+        <div class="kpi"><div class="l">Missing now</div><div class="v" id="k-miss">0</div></div>
+        <div class="kpi"><div class="l">Retransmits</div><div class="v" id="k-retx">0</div></div>
+        <div class="kpi"><div class="l">Recent loss</div><div class="v" id="k-loss">0%</div></div>
+        <div class="kpi"><div class="l">Active path</div><div class="v" id="k-rule" style="font-size:17px">primary</div></div>
+        <div class="kpi"><div class="l">Controller</div><div class="v" id="k-state" style="font-size:15px">MONITORING</div></div>
+      </div>
+
+      <div class="controls" role="group" aria-label="Playback">
+        <button type="button" id="btn-play" aria-pressed="true">Pause</button>
+        <div class="seg" role="group" aria-label="Playback speed">
+          <button type="button" data-speed="0.5" aria-pressed="false">0.5×</button>
+          <button type="button" data-speed="1" aria-pressed="true">1×</button>
+          <button type="button" data-speed="2" aria-pressed="false">2×</button>
+          <button type="button" data-speed="4" aria-pressed="false">4×</button>
+        </div>
+        <span class="sep"></span>
+        <button type="button" id="btn-burst">Burst 20 packets</button>
+        <button type="button" id="btn-demo">Run scripted demo</button>
+        <button type="button" id="btn-dyn" aria-pressed="true">SDN reroute: on</button>
+        <span class="sep"></span>
+        <button type="button" id="btn-down" class="danger">Break primary link</button>
+        <button type="button" id="btn-up">Restore primary link</button>
+        <button type="button" id="btn-reset">Reset lab</button>
+      </div>
+      <div class="slider-row">
+        <label for="loss-P">Loss on primary (s1-s2)</label>
+        <input type="range" id="loss-P" min="0" max="80" step="5" value="0">
+        <output id="loss-P-out" for="loss-P">0%</output>
+      </div>
+      <div class="slider-row">
+        <label for="loss-A">Loss on alternate (s1-s3)</label>
+        <input type="range" id="loss-A" min="0" max="80" step="5" value="0">
+        <output id="loss-A-out" for="loss-A">0%</output>
+      </div>
+    </div>
+
+    <div class="lab-main">
+      <div class="card">
+        <h3>UDP sequence tracking</h3>
+        <p class="hint">The last 48 sequence numbers as the receiver sees them. Green arrived first time, purple arrived after a retransmit, red is a hole it is still missing, dashed is not yet sent.</p>
+        <div class="legend" style="margin-top:8px">
+          <span><i class="sw" style="background:color-mix(in srgb,var(--ok) 30%,transparent)"></i>received</span>
+          <span><i class="sw" style="background:color-mix(in srgb,var(--alt) 40%,transparent)"></i>via retransmit</span>
+          <span><i class="sw" style="background:color-mix(in srgb,var(--bad) 35%,transparent)"></i>missing</span>
+          <span><i class="sw" style="background:var(--bad)"></i>abandoned</span>
+        </div>
+        <div class="seqgrid" id="seqgrid"></div>
+      </div>
+
+      <div class="card">
+        <h3>Path monitor</h3>
+        <p class="hint">The controller polls both paths every 0.5 s with probes and counts data loss over the last 4 s, leaving out the newest second. Four bad polls in a row (2 s) mark the active path degraded.</p>
+        <div class="pathrow">
+          <span><b>Primary</b> · s1-s2-s4</span><span class="mono" id="est-P">–</span>
+          <div class="bar"><b id="bar-P"></b></div>
+          <span class="muted" id="st-P" style="font-size:12px">healthy</span>
+          <span class="probes" id="probe-P"></span>
+        </div>
+        <div class="pathrow" style="margin-top:14px">
+          <span><b>Alternate</b> · s1-s3-s4</span><span class="mono" id="est-A">–</span>
+          <div class="bar"><b id="bar-A" style="background:var(--info)"></b></div>
+          <span class="muted" id="st-A" style="font-size:12px">healthy</span>
+          <span class="probes" id="probe-A"></span>
+        </div>
+        <h3 style="margin-top:18px;font-size:14px">Loss over the last 90 s</h3>
+        <p class="hint">Red line: data loss per second. Shaded band: traffic on the alternate path. Dashed line: 20% degradation threshold.</p>
+        <canvas class="chart" id="chart" role="img" aria-label="Chart of data loss percentage per second over the last 90 seconds, with alternate-path periods shaded"></canvas>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card">
+        <h3>Incidents and recovery clock</h3>
+        <p class="hint">Times are seconds after the fault started. See <a href="#recovery" style="color:var(--accent)">recovery time</a> for definitions.</p>
+        <div class="table-wrap" style="margin-top:10px">
+          <table>
+            <thead><tr><th>#</th><th>Fault</th><th>Was on</th><th class="num">Detect</th><th class="num">Reroute</th><th class="num">1st packet</th><th class="num">Cleared</th><th>Status</th></tr></thead>
+            <tbody id="inc-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Event log</h3>
+        <p class="hint">Newest first. Packet drops are rate-limited so the log stays readable.</p>
+        <div class="log" id="log" aria-live="polite" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MECHANISMS ============ -->
+  <section id="mechanisms" aria-labelledby="mech-h">
+    <div class="eyebrow">02 · Mechanisms</div>
+    <h2 id="mech-h">What each part of the system does</h2>
+    <p class="lede">Each card maps to one bullet of the project brief. The numbers are the values the lab and the reproduction code both use.</p>
+
+    <div class="grid-3" style="margin-top:20px">
+      <div class="card mech">
+        <span class="tag">Task 1 · Sequence tracking</span>
+        <h3>Every datagram carries a number</h3>
+        <div class="spec">header = type (1 B) | seq (4 B, network order)</div>
+        <ul>
+          <li>Sender increments <code>seq</code> per datagram, starting at 1.</li>
+          <li>Receiver keeps the highest seq seen and a set of seqs received.</li>
+          <li><code>cum</code> = highest seq with no hole below it.</li>
+          <li>Duplicates are counted and discarded.</li>
+        </ul>
+      </div>
+      <div class="card mech">
+        <span class="tag">Task 2 · Missing packets</span>
+        <h3>A gap is a hole below the highest seq</h3>
+        <div class="spec">reorder wait 0.25 s · NACK repeat 1.8 s · max 16 per NACK</div>
+        <ul>
+          <li>Any seq between <code>cum+1</code> and <code>highest</code> that has not arrived is a gap.</li>
+          <li>A gap is only NACKed after 0.25 s, so reordered packets are not treated as lost.</li>
+          <li>A still-missing seq is NACKed again every 1.8 s.</li>
+        </ul>
+      </div>
+      <div class="card mech">
+        <span class="tag">Task 3 · ACK and retransmit</span>
+        <h3>Cumulative ACK, selective ACK, NACK</h3>
+        <div class="spec">ACK every 0.5 s · RTO 3.0 s × 1.4<sup>n</sup>, cap 8 s · max 5 retries</div>
+        <ul>
+          <li>ACK carries <code>cum</code> plus up to 24 out-of-order seqs (SACK).</li>
+          <li>The sender frees everything the ACK covers.</li>
+          <li>A NACK triggers an immediate resend of the listed seqs.</li>
+          <li>Anything still unacked after the timer is resent; after 5 tries it is abandoned and counted as failed.</li>
+        </ul>
+      </div>
+      <div class="card mech">
+        <span class="tag">Task 4 · Path monitoring</span>
+        <h3>Count both paths, probe both paths</h3>
+        <div class="spec">poll 0.5 s · window 4 s (+1 s lag) · min 24 packets · threshold 20% · 4 bad polls</div>
+        <ul>
+          <li>The controller injects one probe per path per poll (packet-out at s1, marked with the path's DSCP).</li>
+          <li>Data loss on the active path = packets counted leaving s1 (flow counters) minus packets arriving at h2 (receiver reports), over the last 4 s.</li>
+          <li>A path is healthy when at least 80% of its probes in the last 4 s arrived.</li>
+        </ul>
+      </div>
+      <div class="card mech">
+        <span class="tag">Task 5 · Dynamic rerouting</span>
+        <h3>The controller rewrites the flow rules</h3>
+        <div class="spec">FLOW_MOD prio 200 on s1 and s4 · failback after 6 s healthy</div>
+        <ul>
+          <li>On link-down, PORT_STATUS triggers an immediate reroute, with no waiting for the loss estimate.</li>
+          <li>On degradation, the controller moves to the alternate path only if its probes are healthy.</li>
+          <li>When the primary recovers, traffic returns to it after 6 s of clean probes.</li>
+          <li>Static baseline: the same faults with rerouting disabled.</li>
+        </ul>
+      </div>
+      <div class="card mech">
+        <span class="tag">Task 6 · Recovery and measurement</span>
+        <h3>Time-stamped recovery and loss windows</h3>
+        <div class="spec">loss windows: before fault · during 15 s · after 15 s</div>
+        <ul>
+          <li>The recovery clock starts when the fault is injected.</li>
+          <li>Loss is compared in three windows, and goodput is measured per second.</li>
+          <li>Every run uses three fixed seeds, so the numbers can be reproduced.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3>Two-path topology</h3>
+      <p class="hint" style="margin-bottom:10px">Two disjoint paths between the sender's switch and the receiver's switch let the controller move traffic without touching the hosts. Host IPs: h1 10.0.0.1, h2 10.0.0.2, controller 10.0.0.254.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Link</th><th>Role</th><th class="num">Delay (sim s)</th><th>Failure injected with</th></tr></thead>
+          <tbody>
+            <tr><td><code>h1-s1</code></td><td>sender access</td><td class="num">0.20</td><td class="muted">not injected</td></tr>
+            <tr><td><code>s1-s2</code></td><td>primary, leg 1</td><td class="num">0.22</td><td class="muted">tc netem loss or link down</td></tr>
+            <tr><td><code>s2-s4</code></td><td>primary, leg 2</td><td class="num">0.22</td><td class="muted">tc netem loss or link down</td></tr>
+            <tr><td><code>s1-s3</code></td><td>alternate, leg 1</td><td class="num">0.30</td><td class="muted">tc netem loss or link down</td></tr>
+            <tr><td><code>s3-s4</code></td><td>alternate, leg 2</td><td class="num">0.30</td><td class="muted">tc netem loss or link down</td></tr>
+            <tr><td><code>s4-h2</code></td><td>receiver access</td><td class="num">0.20</td><td class="muted">not injected</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ COMPARISON ============ -->
+  <section id="compare" aria-labelledby="cmp-h">
+    <div class="eyebrow">03 · Performance evaluation</div>
+    <h2 id="cmp-h">Packet loss before and after recovery</h2>
+    <p class="lede">Four fault scenarios, each run with and without SDN rerouting, three seeds per cell. Static means the controller only observes. SDN means the full loop is on. Values are averages across seeds.</p>
+    <div class="card" style="margin-top:20px">
+      <div class="table-wrap">
+        <table id="cmp-table">
+          <thead>
+            <tr>
+              <th>Scenario</th><th>Mode</th>
+              <th class="num">Loss before</th><th class="num">Loss during fault</th><th class="num">Loss after 15 s</th>
+              <th class="num">Never delivered</th><th class="num">Reroute at</th><th class="num">Backlog cleared</th>
+              <th class="num">Avg latency</th><th class="num">Retransmit overhead</th>
+            </tr>
+          </thead>
+          <tbody id="cmp-body"></tbody>
+        </table>
+      </div>
+      <p class="hint" style="margin-top:10px">Loss = data packets that did not arrive on first try, as a share of those sent in the window. Never delivered = packets abandoned after 5 retries, as a share of packets old enough to judge. Reroute and backlog times are seconds after the fault.</p>
+    </div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card">
+        <h3>Loss after recovery</h3>
+        <p class="hint">Share of packets still lost 15 s after the fault. Lower is better.</p>
+        <div class="cmp-bars" id="bars-loss" style="margin-top:14px"></div>
+      </div>
+      <div class="card">
+        <h3>Throughput after recovery</h3>
+        <p class="hint">Delivered packets per second after the 15 s window. Source rate is 8 per second.</p>
+        <div class="cmp-bars" id="bars-gp" style="margin-top:14px"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3>What the comparison shows</h3>
+      <ul class="muted" style="margin:10px 0 0;padding-left:18px;display:grid;gap:6px;font-size:14px">
+        <li id="finding-1"></li>
+        <li id="finding-2"></li>
+        <li id="finding-3"></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ RECOVERY TIME ============ -->
+  <section id="recovery" aria-labelledby="rec-h">
+    <div class="eyebrow">04 · Recovery time</div>
+    <h2 id="rec-h">How recovery time is measured</h2>
+    <p class="lede">One clock per incident, started at fault injection. Each milestone is recorded when it happens, not estimated afterwards.</p>
+    <div class="grid-2" style="margin-top:20px">
+      <div class="card">
+        <h3>Milestones</h3>
+        <ol class="steps" style="margin:12px 0 0;padding-left:0">
+          <li><b>Detect</b> · the controller decides the path is bad, from PORT_STATUS or from four bad polls (2 s).</li>
+          <li><b>Reroute</b> · both FLOW_MODs are applied on s1 and s4, so new packets follow the other path.</li>
+          <li><b>First packet</b> · the first data packet is delivered over the new path.</li>
+          <li><b>Cleared</b> · every packet up to the highest seq has been delivered (retransmits included).</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h3>Median recovery across the four scenarios</h3>
+        <p class="hint">Seconds after the fault, SDN mode, averaged over three seeds.</p>
+        <div class="cmp-bars" id="bars-rec" style="margin-top:14px"></div>
+        <p class="hint" style="margin-top:14px" id="rec-note"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ REPRODUCE ============ -->
+  <section id="reproduce" aria-labelledby="rep-h">
+    <div class="eyebrow">05 · Reproduce</div>
+    <h2 id="rep-h">Mininet topology, controller and socket code</h2>
+    <p class="lede">The lab above runs the same protocol and controller rules in the browser. The files below are the Mininet implementation in the project repository. They were run end to end here, on Mininet with Open vSwitch and OS-Ken, for the link-failure and meter-emulated loss faults; the netem loss fault needs the sch_netem kernel module, which this test machine did not have. Measured runs are in the repository's results folder.</p>
+
+    <ol class="steps" style="margin-top:20px;padding-left:0;display:grid;gap:14px">
+      <li class="card"><h3>1 · Start the controller</h3><p class="hint">Run <code>sudo python3 run_controller.py</code>. It loads pathguard.py on TCP 6633 and installs base forwarding when the four switches connect. Set <code>PATHGUARD_STATIC=1</code> for the static baseline.</p></li>
+      <li class="card"><h3>2 · Run one experiment</h3><p class="hint">Run <code>sudo python3 run_experiment.py --out results/demo --fault loss --loss 60</code>. It builds topo.py, checks the port map, starts receiver.py on h2 and sender.py on h1, injects the fault and saves the logs. Faults: none, loss (netem), meter, down.</p></li>
+      <li class="card"><h3>3 · Analyse</h3><p class="hint">Run <code>python3 analyze.py results/demo</code>. It writes metrics.json: loss before, during and after the fault, detection, reroute, first packet on the alternate path, backlog cleared, and goodput.</p></li>
+      <li class="card"><h3>4 · Repeat for every scenario</h3><p class="hint">Run <code>sudo ./run_validation.sh</code>. It runs each fault in SDN and static mode with repeats, then prints the summary table from summarize.py.</p></li>
+    </ol>
+
+    <div class="codegrid" style="margin-top:20px">
+      <div class="codebox"><div class="hd"><span>topo.py</span><button type="button" data-copy="topo">Copy</button></div><pre id="code-topo"></pre></div>
+      <div class="codebox"><div class="hd"><span>run_experiment.py</span><button type="button" data-copy="run">Copy</button></div><pre id="code-run"></pre></div>
+      <div class="codebox"><div class="hd"><span>sender.py (h1)</span><button type="button" data-copy="sender">Copy</button></div><pre id="code-sender"></pre></div>
+      <div class="codebox"><div class="hd"><span>receiver.py (h2)</span><button type="button" data-copy="receiver">Copy</button></div><pre id="code-receiver"></pre></div>
+      <div class="codebox" style="grid-column:1/-1"><div class="hd"><span>pathguard.py (os-ken controller)</span><button type="button" data-copy="ctl">Copy</button></div><pre id="code-ctl"></pre></div>
+    </div>
+  </section>
+
+  <!-- ============ RUBRIC ============ -->
+  <section id="rubric" aria-labelledby="rub-h">
+    <div class="eyebrow">06 · Evaluation criteria</div>
+    <h2 id="rub-h">Rubric coverage</h2>
+    <p class="lede">Every criterion from the project rubric, the section of this page that covers it, and what you still need to produce yourself.</p>
+
+    <div class="card" style="margin-top:20px">
+      <div class="table-wrap">
+        <table class="rub-table">
+          <thead><tr><th>Deliverable</th><th>Criterion</th><th class="num">Marks</th><th>Where it is covered here</th></tr></thead>
+          <tbody>
+            <tr><td class="d">D1 · 15</td><td>Problem understanding and architecture</td><td class="m">2</td><td>Sections 02 (mechanisms, topology table) and the architecture in the live lab</td></tr>
+            <tr><td class="d">D1 · 15</td><td>TCP/UDP socket implementation</td><td class="m">4</td><td>Section 02 Tasks 1–3, section 05 sender.py and receiver.py</td></tr>
+            <tr><td class="d">D1 · 15</td><td>Mininet + SDN implementation</td><td class="m">4</td><td>Section 02 topology table, section 05 topo.py and pathguard.py</td></tr>
+            <tr><td class="d">D1 · 15</td><td>Socket–SDN integration</td><td class="m">3</td><td>Section 02 Task 4–5, live lab where loss reports drive FLOW_MODs</td></tr>
+            <tr><td class="d">D1 · 15</td><td>Initial testing and demo</td><td class="m">2</td><td>Live lab Burst and Scripted demo buttons, section 05 step 4</td></tr>
+            <tr><td class="d">D2 · 25</td><td>Complete application functionality</td><td class="m">4</td><td>Sequence tracking, gap detection, ACK, NACK, retransmission all visible in the lab</td></tr>
+            <tr><td class="d">D2 · 25</td><td>Dynamic SDN functionality</td><td class="m">6</td><td>Rerouting on loss and on PORT_STATUS, failback, toggle for static baseline</td></tr>
+            <tr><td class="d">D2 · 25</td><td>Challenging scenario and robustness</td><td class="m">4</td><td>Packet loss at 10%, 30%, 60%, and a full link failure, see section 03</td></tr>
+            <tr><td class="d">D2 · 25</td><td>Performance evaluation and comparison</td><td class="m">5</td><td>Section 03 table and bars, static vs SDN, three seeds, loss in three windows</td></tr>
+            <tr><td class="d">D2 · 25</td><td>Documentation, final demo and viva</td><td class="m">6</td><td>This page covers the documentation. The GitHub repo, live demo and viva are listed below</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ============ VIVA ============ -->
+  <section id="viva" aria-labelledby="viva-h">
+    <h2 id="viva-h">Common Questions</h2>
+    <div class="card" style="margin-top:20px">
+      <details class="qa" open><summary>Why use sequence numbers and a cumulative ACK, not a per-packet ACK?</summary><p>One cumulative number says every packet up to it arrived, which is cheap to send and robust to lost ACKs, since the next ACK repeats the information. The SACK list adds the out-of-order packets, so the sender only resends real holes.</p></details>
+      <details class="qa"><summary>Why wait 0.25 s before sending a NACK?</summary><p>UDP can reorder packets, especially across paths with different delays. Without the wait, every reordered packet would trigger a needless retransmission. The wait trades a little recovery latency for fewer duplicates. The duplicate count in the results shows the cost.</p></details>
+      <details class="qa"><summary>Why does the controller use two signals for loss?</summary><p>Probes measure path health even when no data is flowing. The data-loss estimate measures what the application actually experiences. Requiring four bad polls in a row stops one unlucky sample from triggering a reroute, and an application report can confirm the problem.</p></details>
+      <details class="qa"><summary>What happens if both paths fail?</summary><p>The controller finds no healthy alternate and stays on the current path, logging "no healthy alternate path". The sender keeps retransmitting until the 5-retry limit, then abandons packets and counts them as failed. The residual loss figure in the comparison shows this case.</p></details>
+      <details class="qa"><summary>Why is the static baseline needed?</summary><p>Without it, the improvement cannot be attributed to rerouting. The static run uses the same seeds, faults and protocol, with only the controller's reroute logic disabled. The difference is what the SDN loop buys.</p></details>
+      <details class="qa"><summary>Why is failback delayed by 6 s?</summary><p>A link that has just recovered can flap. Waiting for several seconds of clean probes avoids moving traffic back and forth. The cost is slightly longer time on the alternate path.</p></details>
+    </div>
+  </section>
+
+  <div class="foot">
+    The live lab runs in the browser and follows the same protocol and controller rules as the Mininet code in the project repository. Mininet measurements are in the repository's results folder.
+  </div>
+</div>
+
+<script>
+/* ===== Packet-loss detection & recovery: simulation engine (no DOM) ===== */
+var Eng = (function () {
+  'use strict';
+  var LINK = { 'h1-s1': 0.2, 's1-s2': 0.22, 's2-s4': 0.22, 's1-s3': 0.3, 's3-s4': 0.3, 's4-h2': 0.2, 'c0-s1': 0.5, 'c0-s4': 0.5, 'c0-s2': 0.4, 'c0-s3': 0.4 };
+  function ld(a, b) { return LINK[a + '-' + b] || LINK[b + '-' + a] || 0.3; }
+  function mid(p) { return p === 'P' ? 's2' : 's3'; }
+  function other(p) { return p === 'P' ? 'A' : 'P'; }
+  function pname(p) { return p === 'P' ? 'primary path (s1-s2-s4)' : 'alternate path (s1-s3-s4)'; }
+  function pshort(p) { return p === 'P' ? 'primary' : 'alternate'; }
+  function pct(v) { return v == null ? '-' : Math.round(v * 100) + '%'; }
+  function rngf(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  var S = null;
+
+  function defaults() {
+    return { rate: 8, thresh: 0.2, poll: 0.5, consec: 4, rto: 3.0, maxRetry: 5, reorderWait: 0.25, nackGap: 1.8, dynamic: true, failback: true, baseLoss: 0.01 };
+  }
+  function newState(seed, over) {
+    var cfg = defaults();
+    if (over) for (var k in over) cfg[k] = over[k];
+    return {
+      t: 0, rnd: rngf(seed || 1), cfg: cfg,
+      imp: { P: { loss: 0, down: false }, A: { loss: 0, down: false } },
+      rule: { s1: 'P', s4: 'P' },
+      events: [], pkts: [], fx: [], log: [], hist: [], tx: [],
+      seq: 1, pid: 0,
+      snd: { buf: {}, first: {}, retx: 0, tx: 0, failed: 0, acksRx: 0, nacksRx: 0, retxSeq: {} },
+      rcv: { got: [], highest: 0, cum: 0, dup: 0, deliv: 0, latSum: 0, nacksTx: 0, acksTx: 0, gapT: {}, lastNack: {}, viaRetx: {}, recovered: 0, gapsSeen: 0, dt: [], lastPath: 'P' },
+      ctl: { bad: 0, est: { P: null, A: null }, probe: { P: [], A: [] }, known: { P: false, A: false }, rerouting: false, state: 'MONITORING', lastSwitch: -99, reroutes: 0, failbacks: 0, flowMods: 0, win: [], lastNoAlt: -99, app: null, lastRep: null, ignoreApp: 0, reports: 0 },
+      drops: { data: 0, ctl: 0 }, failedSet: {}, cnt: { s1: { P: 0, A: 0 }, s4: { P: 0, A: 0 } },
+      inc: null, incs: [], incN: 0, flags: {}, last: { tx: 0, drop: 0, deliv: 0, retx: 0 }, lastDropLog: -9, lastRetxLog: -9
+    };
+  }
+
+  function sched(d, fn) { S.events.push({ at: S.t + d, fn: fn }); }
+  function log(text, cls) { S.log.push({ t: S.t, text: text, cls: cls || '' }); if (S.log.length > 300) S.log.shift(); }
+  function fx(o) { o.t0 = S.t; S.fx.push(o); }
+
+  /* ---------- packets & links ---------- */
+  function mk(kind, seq, retx, info) {
+    var p = { id: ++S.pid, kind: kind, seq: seq, retx: !!retx, segs: [], cursor: S.t, dead: false, done: false, end: Infinity, path: null, info: info || null };
+    S.pkts.push(p); return p;
+  }
+  function addSeg(p, a, b, d, drop) {
+    var s = { a: a, b: b, t0: p.cursor, t1: p.cursor + d, drop: !!drop };
+    p.cursor = s.t1; p.segs.push(s); return s;
+  }
+  function fin(p, extra) { p.done = true; p.end = S.t + (extra || 0.08); }
+  function step(p, a, b, cb) { var d = ld(a, b); addSeg(p, a, b, d); sched(d, cb); }
+  function lossProb(path) { var m = S.imp[path]; return m.down ? 1 : 1 - (1 - S.cfg.baseLoss) * (1 - m.loss); }
+
+  function decideHop(p, a, b, path, isData, cb) {
+    var d = ld(a, b), drop = S.rnd() < lossProb(path);
+    if (isData) {
+      S.tx.push({ t: S.t, path: path, drop: drop, seq: p.seq, retx: p.retx });
+      S.ctl.win.push({ t: S.t + d, path: path, ok: !drop });
+    }
+    if (drop) {
+      addSeg(p, a, b, d * 0.55, true); p.dead = true; p.end = S.t + d * 0.55 + 0.6;
+      sched(d * 0.55, function () {
+        S.drops[isData ? 'data' : 'ctl']++;
+        fx({ kind: 'drop', a: a, b: b, f: 0.55 });
+        if (isData && S.t - S.lastDropLog > 1.2) {
+          S.lastDropLog = S.t;
+          log('link ' + a + '-' + b + ' dropped DATA #' + p.seq + (p.retx ? ' (retransmission)' : '') + ' [' + pshort(path) + ' path]', 'bad');
+        }
+      });
+      return;
+    }
+    addSeg(p, a, b, d); sched(d, cb);
+  }
+
+  /* ---------- sender (h1) ---------- */
+  function sendData(seq, retx) {
+    var p = mk('DATA', seq, retx);
+    step(p, 'h1', 's1', function () {
+      var path = S.rule.s1; p.path = path; S.cnt.s1[path]++;
+      decideHop(p, 's1', mid(path), path, true, function () {
+        step(p, mid(path), 's4', function () {
+          step(p, 's4', 'h2', function () { fin(p); rcvData(p); });
+        });
+      });
+    });
+  }
+  function sndOnce() {
+    var seq = S.seq++;
+    S.snd.buf[seq] = { lastTx: S.t, retries: 0 }; S.snd.first[seq] = S.t; S.snd.tx++;
+    sendData(seq, false);
+  }
+  function sndTick() { sndOnce(); sched(1 / S.cfg.rate, sndTick); }
+  function retransmit(seq, why) {
+    var b = S.snd.buf[seq]; if (!b) return;
+    if (S.t - b.lastTx < 0.5) return;
+    if (b.retries >= S.cfg.maxRetry) {
+      delete S.snd.buf[seq]; S.snd.failed++; S.failedSet[seq] = true;
+      log('DATA #' + seq + ' abandoned after ' + b.retries + ' retransmissions', 'bad'); return;
+    }
+    b.retries++; b.lastTx = S.t; S.snd.retx++; S.snd.tx++; S.snd.retxSeq[seq] = true;
+    if (S.t - S.lastRetxLog > 1.5) { S.lastRetxLog = S.t; log('sender: retransmit DATA #' + seq + ' (' + why + ', attempt ' + (b.retries + 1) + ')', 'warn'); }
+    sendData(seq, true);
+  }
+  function rtoTick() {
+    var B = S.snd.buf;
+    for (var k in B) {
+      var b = B[k], to = Math.min(8, S.cfg.rto * Math.pow(1.4, b.retries));
+      if (S.t - b.lastTx > to) retransmit(+k, 'RTO');
+    }
+    sched(0.25, rtoTick);
+  }
+  function onCtl(kind, data) {
+    var B = S.snd.buf;
+    if (kind === 'ACK') {
+      S.snd.acksRx++;
+      for (var k in B) { if (+k <= data.cum) delete B[k]; }
+      data.sack.forEach(function (s) { delete B[s]; });
+    } else if (kind === 'NACK') {
+      S.snd.nacksRx++;
+      data.list.forEach(function (s) { retransmit(s, 'NACK'); });
+    }
+  }
+
+  /* ---------- receiver (h2) ---------- */
+  function rcvData(p) {
+    var R = S.rcv, seq = p.seq;
+    if (R.got[seq]) { R.dup++; fx({ kind: 'node', node: 'h2', color: 'warn' }); return; }
+    R.got[seq] = true; R.deliv++; R.dt.push(S.t);
+    R.latSum += S.t - S.snd.first[seq];
+    if (p.retx) { R.viaRetx[seq] = true; R.recovered++; S.flags.recovered = true; }
+    R.lastPath = p.path;
+    fx({ kind: 'node', node: 'h2', color: p.retx ? 'accent-2' : 'ok' });
+    var inc = S.inc;
+    if (inc && inc.tInstall != null && inc.tFirst == null && !inc.resolved && p.path === inc.toPath) {
+      inc.tFirst = S.t;
+      log('first DATA delivered over ' + pname(inc.toPath) + ' ' + (S.t - inc.t0).toFixed(1) + 's after the fault', 'ok');
+    }
+    if (seq > R.highest) {
+      for (var s = R.highest + 1; s < seq; s++) { if (!R.got[s] && R.gapT[s] === undefined) R.gapT[s] = S.t; }
+      R.highest = seq;
+    }
+    while (R.got[R.cum + 1]) R.cum++;
+  }
+  function sendCtl(kind, data, dest) {
+    var p = mk(kind, 0, false, data);
+    step(p, 'h2', 's4', function () {
+      var path = S.rule.s4; p.path = path; S.cnt.s4[path]++;
+      decideHop(p, 's4', mid(path), path, false, function () {
+        step(p, mid(path), 's1', function () {
+          if (dest === 'c0') step(p, 's1', 'c0', function () { fin(p); onReport(data); });
+          else step(p, 's1', 'h1', function () { fin(p); onCtl(kind, data); });
+        });
+      });
+    });
+  }
+  function ackTick() {
+    var R = S.rcv;
+    if (R.highest > 0) {
+      var sack = [];
+      for (var s = R.highest; s > R.cum && sack.length < 24; s--) if (R.got[s]) sack.push(s);
+      R.acksTx++; sendCtl('ACK', { cum: R.cum, sack: sack });
+    }
+    sched(0.5, ackTick);
+  }
+  function nackTick() {
+    var R = S.rcv, list = [];
+    for (var s = R.cum + 1; s < R.highest && list.length < 16; s++) {
+      if (R.got[s] || S.failedSet[s]) continue;
+      if (R.gapT[s] === undefined) R.gapT[s] = S.t;
+      if (S.t - R.gapT[s] >= S.cfg.reorderWait && (R.lastNack[s] === undefined || S.t - R.lastNack[s] >= S.cfg.nackGap)) list.push(s);
+    }
+    if (list.length) {
+      list.forEach(function (x) { if (R.lastNack[x] === undefined) R.gapsSeen++; R.lastNack[x] = S.t; });
+      R.nacksTx++; S.flags.nack = true;
+      log('receiver: gap detected, NACK ' + list.slice(0, 5).map(function (x) { return '#' + x; }).join(' ') + (list.length > 5 ? ' ...' : ''), 'warn');
+      sendCtl('NACK', { list: list });
+    }
+    sched(0.25, nackTick);
+  }
+  function repTick() {
+    var R = S.rcv;
+    if (R.highest > 0) sendCtl('REPORT', { hi: R.highest, gaps: R.gapsSeen, deliv: R.deliv }, 'c0');
+    sched(1, repTick);
+  }
+  function onReport(info) {
+    var C = S.ctl; C.reports++;
+    if (C.lastRep && info.hi > C.lastRep.hi) C.app = { loss: Math.min(1, (info.gaps - C.lastRep.gaps) / (info.hi - C.lastRep.hi)), t: S.t };
+    C.lastRep = info;
+  }
+
+  /* ---------- SDN controller (c0) ---------- */
+  function ctlPkt(kind, a, b, d, info, cb) {
+    var p = mk(kind, 0, false, info); addSeg(p, a, b, d);
+    sched(d, function () { fin(p); if (cb) cb(); });
+  }
+  function isOpen() { return S.inc && S.inc.tClear == null && !S.inc.resolved; }
+  function healthy(X) {
+    var C = S.ctl; if (C.known[X]) return false;
+    var pr = C.probe[X]; if (pr.length < 3) return true;
+    var f = pr.filter(function (v) { return !v; }).length;
+    return f <= Math.floor(S.cfg.thresh * pr.length);
+  }
+  function rerouteTo(X, reason) {
+    var C = S.ctl;
+    C.rerouting = true; C.bad = 0; C.lastSwitch = S.t; C.ignoreApp = S.t + 4;
+    if (reason === 'failback') C.failbacks++; else C.reroutes++;
+    log('controller: ' + (reason === 'failback' ? 'FAILBACK' : 'REROUTE') + ' to ' + pname(X) + ' (' + reason + '), sending FLOW_MOD prio 200 to s1,s4', 'warn');
+    fx({ kind: 'node', node: 'c0', color: 'warn' });
+    S.flags[reason === 'failback' ? 'failback' : 'reroute'] = true;
+    var cmd = X === 'A' ? 'ADD prio=200 out=s3' : 'DELETE_STRICT prio=200';
+    C.flowMods += 2;
+    ctlPkt('FLOW_MOD', 'c0', 's1', 0.5, { type: 'OFPT_FLOW_MOD', dpid: 1, cookie: '0x29', cmd: cmd }, function () {
+      S.rule.s1 = X;
+      var inc = S.inc;
+      if (reason !== 'failback' && isOpen() && inc.tInstall == null) {
+        inc.tInstall = S.t; inc.toPath = X;
+        log('flows installed on s1: traffic now on ' + pname(X) + ' (' + (S.t - inc.t0).toFixed(1) + 's after fault)', 'ok');
+      }
+    });
+    ctlPkt('FLOW_MOD', 'c0', 's4', 0.5, { type: 'OFPT_FLOW_MOD', dpid: 4, cookie: '0x29', cmd: cmd }, function () {
+      S.rule.s4 = X; C.rerouting = false;
+      log('flows installed on s4: ACK/NACK/REPORT return via ' + pshort(X), 'ok');
+    });
+  }
+  function onPortStatus(path, down) {
+    var C = S.ctl; C.known[path] = down;
+    log('controller: PORT_STATUS s1 ' + (path === 'P' ? 'port 2 (to s2)' : 'port 3 (to s3)') + ' is ' + (down ? 'DOWN' : 'UP'), down ? 'bad' : 'ok');
+    if (down && S.rule.s1 === path) {
+      S.flags.portdown = true;
+      if (isOpen() && S.inc.tDetect == null) S.inc.tDetect = S.t;
+      if (!S.cfg.dynamic) { log('static baseline: SDN reroute disabled, traffic stays on ' + pname(path), 'bad'); return; }
+      var o = other(path);
+      if (healthy(o) && !C.rerouting) rerouteTo(o, 'port-status');
+      else log('no healthy alternate path; staying on ' + pname(path), 'bad');
+    }
+  }
+  function degraded(cur, l, appBad) {
+    var C = S.ctl, c = S.cfg;
+    if (C.bad === c.consec) {
+      if (isOpen() && S.inc.tDetect == null) S.inc.tDetect = S.t;
+      log('controller: ' + pname(cur) + ' loss ' + pct(l) + (appBad ? ', app report ' + pct(C.app.loss) : '') + ' > ' + pct(c.thresh) + ' for ' + C.bad + ' polls, marked degraded', 'warn');
+    }
+    if (!c.dynamic) {
+      if (S.t - C.lastNoAlt > 5) { C.lastNoAlt = S.t; log('static baseline: SDN reroute disabled, traffic stays on ' + pname(cur), 'bad'); }
+      return;
+    }
+    var o = other(cur);
+    if (healthy(o)) rerouteTo(o, 'loss');
+    else if (S.t - C.lastNoAlt > 5) { C.lastNoAlt = S.t; S.flags.noalt = true; log('no healthy alternate path (probes failing); staying on ' + pname(cur), 'bad'); }
+  }
+  function poll() {
+    var C = S.ctl, c = S.cfg, cur = S.rule.s1, now = S.t;
+    C.win = C.win.filter(function (r) { return r.t > now - 12; });
+    ['P', 'A'].forEach(function (p) {
+      var ok = !S.imp[p].down && S.rnd() >= lossProb(p);
+      C.probe[p].push(ok); if (C.probe[p].length > 8) C.probe[p].shift();
+    });
+    ['P', 'A'].forEach(function (p) {
+      var n = 0, d = 0;
+      C.win.forEach(function (r) { if (r.path === p && r.t <= now && r.t > now - 4) { n++; if (!r.ok) d++; } });
+      C.est[p] = n >= 24 ? d / n : null;
+    });
+    ctlPkt('STATS', 's1', 'c0', 0.5, { type: 'OFPMP_PORT_STATS' }, null);
+    var l = C.est[cur];
+    var appBad = !!(C.app && now - C.app.t < 3 && now > C.ignoreApp && C.app.loss > c.thresh);
+    var bad = (l !== null && l > c.thresh);   // same single signal as pathguard.py (receiver counts per path)
+    if (!C.rerouting) {
+      C.bad = bad ? C.bad + 1 : 0;
+      if (C.bad >= c.consec) degraded(cur, l, appBad);
+      else if (cur === 'A' && c.failback && now - C.lastSwitch > 6 && !C.known.P && C.probe.P.length >= 8 && C.probe.P.every(Boolean) && !S.imp.P.down) {
+        rerouteTo('P', 'failback');
+      }
+    }
+    if (!c.dynamic && isOpen() && now - S.inc.t0 > 10) S.flags.staticpain = true;
+    C.state = C.rerouting ? 'REROUTING' : (C.bad >= c.consec ? 'DEGRADED' : (S.rule.s1 === 'A' ? 'REROUTED' : 'MONITORING'));
+    sched(c.poll, poll);
+  }
+
+  /* ---------- incidents & sampling ---------- */
+  function checkIncident() {
+    var act = S.rule.s1, im = S.imp[act], bad = im.down || im.loss >= S.cfg.thresh;
+    if (bad && !isOpen()) {
+      S.inc = { id: ++S.incN, t0: S.t, kind: im.down ? 'link down' : 'loss ' + Math.round(im.loss * 100) + '%', path: act, toPath: null, tDetect: null, tInstall: null, tFirst: null, tClear: null, resolved: null };
+      S.incs.push(S.inc); S.flags.fault = true;
+      log('INCIDENT #' + S.inc.id + ': ' + S.inc.kind + ' on ' + pname(act) + ' (recovery clock started)', 'bad');
+    } else if (!bad && isOpen() && S.inc.tInstall == null) {
+      S.inc.resolved = 'fault cleared'; log('incident #' + S.inc.id + ' ended: fault cleared before any reroute', 'ok');
+    }
+  }
+  function missingCount() {
+    var R = S.rcv, n = 0;
+    for (var s = R.cum + 1; s <= R.highest; s++) if (!R.got[s] && !S.failedSet[s]) n++;
+    return n;
+  }
+  function incTick() {
+    var inc = S.inc;
+    if (inc && isOpen() && inc.tFirst != null && missingCount() === 0) {
+      inc.tClear = S.t; S.flags.cleared = true;
+      log('backlog cleared: every packet up to #' + S.rcv.highest + ' delivered, full recovery in ' + (S.t - inc.t0).toFixed(1) + 's', 'ok');
+    }
+    sched(0.25, incTick);
+  }
+  function sample() {
+    var L = S.last, R = S.rcv;
+    S.hist.push({ t: S.t, tx: S.snd.tx - L.tx, drop: S.drops.data - L.drop, deliv: R.deliv - L.deliv, retx: S.snd.retx - L.retx, rule: S.rule.s1 });
+    L.tx = S.snd.tx; L.drop = S.drops.data; L.deliv = R.deliv; L.retx = S.snd.retx;
+    if (S.hist.length > 240) S.hist.shift();
+    sched(1, sample);
+  }
+
+  /* ---------- engine control ---------- */
+  function boot() {
+    log('UDP app started: sender h1 to receiver h2:9000 at ' + S.cfg.rate + ' pkt/s; controller c0 monitoring both paths', '');
+    sched(0.1, sndTick); sched(0.25, rtoTick); sched(0.5, ackTick); sched(0.25, nackTick);
+    sched(1, repTick); sched(S.cfg.poll, poll); sched(1, sample); sched(0.25, incTick);
+  }
+  function advance(d) {
+    var target = S.t + d;
+    for (;;) {
+      var bi = -1, bt = Infinity;
+      for (var i = 0; i < S.events.length; i++) { var e = S.events[i]; if (e.at <= target && e.at < bt) { bt = e.at; bi = i; } }
+      if (bi < 0) break;
+      var ev = S.events.splice(bi, 1)[0]; S.t = ev.at; ev.fn();
+    }
+    S.t = target;
+    S.pkts = S.pkts.filter(function (p) { return !p.done && !p.dead ? true : S.t < p.end; });
+    S.fx = S.fx.filter(function (f) { return S.t - f.t0 < 0.8; });
+  }
+  function setLoss(path, pctv) {
+    S.imp[path].loss = pctv / 100;
+    log('netem: ' + (pctv ? 'loss ' + pctv + '%' : 'loss cleared') + ' on ' + (path === 'P' ? 's1-s2' : 's1-s3') + ' (' + pshort(path) + ')', pctv ? 'bad' : 'ok');
+    checkIncident();
+  }
+  function setDown(path, down) {
+    S.imp[path].down = down;
+    log((down ? 'link s1-' + (path === 'P' ? 's2' : 's3') + ' DOWN' : 'link s1-' + (path === 'P' ? 's2' : 's3') + ' restored'), down ? 'bad' : 'ok');
+    checkIncident();
+    sched(0.2, function () {
+      ctlPkt('PORT_STATUS', mid(path), 'c0', 0.4, { type: 'OFPT_PORT_STATUS', port: path === 'P' ? 2 : 3, link: down ? 'DOWN' : 'UP' }, function () { onPortStatus(path, down); });
+    });
+  }
+  function setCfg(k, v) { S.cfg[k] = v; }
+  function burst(n) { for (var i = 0; i < n; i++) sched(i * 0.04, sndOnce); }
+  function demo() {
+    var t = S.t;
+    function at(dt, fn) { S.events.push({ at: t + dt, fn: fn }); }
+    log('auto demo: loss on primary, recovery, failback, then a link failure', 'warn');
+    at(5, function () { setLoss('P', 35); });
+    at(32, function () { setLoss('P', 0); });
+    at(55, function () { setDown('P', true); });
+    at(75, function () { setDown('P', false); });
+  }
+  function reset(seed, over) { S = newState(seed || 7, over); boot(); return S; }
+
+  /* ---------- metrics ---------- */
+  function lossIn(t0, t1) {
+    var n = 0, d = 0;
+    S.tx.forEach(function (r) { if (r.t >= t0 && r.t < t1) { n++; if (r.drop) d++; } });
+    return { n: n, d: d, p: n ? d / n : null };
+  }
+  function goodput(a, b) {
+    var n = 0; S.rcv.dt.forEach(function (t) { if (t >= a && t < b) n++; });
+    return b > a ? n / (b - a) : 0;
+  }
+  function residual() {
+    var tot = 0, lost = 0;
+    for (var s = 1; s < S.seq; s++) { if (S.snd.first[s] <= S.t - 6) { tot++; if (!S.rcv.got[s]) lost++; } }
+    return { n: tot, lost: lost, p: tot ? lost / tot : 0 };
+  }
+  function phases() {
+    var inc = S.inc;
+    if (!inc) return { before: lossIn(0, Infinity), during: null, after: null, inc: null };
+    var end = inc.tInstall != null ? inc.tInstall : Infinity;
+    return { before: lossIn(0, inc.t0), during: lossIn(inc.t0, end), after: inc.tInstall != null ? lossIn(inc.tInstall, Infinity) : null, inc: inc };
+  }
+  function summary(faultT) {
+    var R = S.rcv, T = S.t, res = residual(), sent = S.seq - 1;
+    var pre = lossIn(0, faultT), dur = lossIn(faultT, faultT + 15), post = lossIn(faultT + 15, T);
+    var inc = S.inc, o = null;
+    if (inc) o = { kind: inc.kind, detect: inc.tDetect != null ? inc.tDetect - inc.t0 : null, install: inc.tInstall != null ? inc.tInstall - inc.t0 : null, first: inc.tFirst != null ? inc.tFirst - inc.t0 : null, clear: inc.tClear != null ? inc.tClear - inc.t0 : null };
+    return {
+      sent: sent, delivered: R.deliv, failed: S.snd.failed, dup: R.dup, retx: S.snd.retx, txTotal: S.snd.tx, dropsData: S.drops.data,
+      nacksTx: R.nacksTx, acksTx: R.acksTx, gapsSeen: R.gapsSeen, gotCount: R.got.filter(Boolean).length,
+      residual: res.p, residualLost: res.lost,
+      lossPre: pre.p, lossDur: dur.p, lossPost: post.p,
+      goodputPre: goodput(0, faultT), goodputPost: goodput(faultT + 15, T),
+      avgLat: R.deliv ? R.latSum / R.deliv : null, overhead: sent ? S.snd.retx / sent : 0,
+      reroutes: S.ctl.reroutes, failbacks: S.ctl.failbacks, flowMods: S.ctl.flowMods, rule: S.rule.s1, state: S.ctl.state, inc: o
+    };
+  }
+  function run(opts) {
+    var old = S;
+    S = newState(opts.seed || 1, opts.cfg);
+    boot();
+    (opts.script || []).forEach(function (a) {
+      S.events.push({ at: a.t, fn: function () { if (a.act === 'loss') setLoss(a.path, a.pct); else if (a.act === 'down') setDown(a.path, a.v); } });
+    });
+    advance(opts.T || 60);
+    var res = summary(opts.faultT || 15);
+    S = old; return res;
+  }
+
+  return {
+    get: function () { return S; }, reset: reset, advance: advance, setLoss: setLoss, setDown: setDown, setCfg: setCfg, burst: burst, demo: demo,
+    run: run, phases: phases, residual: residual, lossIn: lossIn, goodput: goodput, isOpen: isOpen, missingCount: missingCount,
+    defaults: defaults, pname: pname, pct: pct
+  };
+})();
+if (typeof module !== 'undefined') module.exports = Eng;
+
+</script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var NS = 'http://www.w3.org/2000/svg';
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function pc(v, d) { return v == null || isNaN(v) ? '–' : (v * 100).toFixed(d == null ? 1 : d) + '%'; }
+  function sec(v) { return v == null || isNaN(v) ? '–' : v.toFixed(2) + ' s'; }
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  var store = {
+    get: function (k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+  var reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  /* ---------- lab state ---------- */
+  var speed = reduce ? 0.5 : 1, playing = true, lastFrame = performance.now(), paintAcc = 0;
+  var S = Eng.reset(7);
+  var lastLogKey = '';
+
+  /* ---------- topology ---------- */
+  var NODES = { c0: [380, 40], h1: [60, 170], s1: [200, 170], s2: [380, 106], s3: [380, 234], s4: [560, 170], h2: [700, 170] };
+  var LINKS = [['h1', 's1', 'd'], ['s1', 's2', 'P'], ['s2', 's4', 'P'], ['s1', 's3', 'A'], ['s3', 's4', 'A'], ['s4', 'h2', 'd'], ['c0', 's1', 'c'], ['c0', 's2', 'c'], ['c0', 's3', 'c'], ['c0', 's4', 'c']];
+  var svg = $('topo');
+  function el(tag, attrs, parent) { var e = document.createElementNS(NS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+  var linkEls = {};
+  LINKS.forEach(function (L) {
+    var a = NODES[L[0]], b = NODES[L[1]], key = L[0] + '-' + L[1];
+    linkEls[key] = { e: el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], 'class': 'lk' }, svg), kind: L[2], key: key };
+  });
+  var NODE_INFO = {
+    c0: ['OS-Ken controller', '10.0.0.254', 'ctl'], h1: ['h1 sender', '10.0.0.1', 'host'], h2: ['h2 receiver', '10.0.0.2', 'host'],
+    s1: ['s1 ingress', 'OpenFlow 1.3', 'sw'], s2: ['s2 primary', 'mid', 'sw'], s3: ['s3 alternate', 'mid', 'sw'], s4: ['s4 egress', 'OpenFlow 1.3', 'sw']
+  };
+  Object.keys(NODES).forEach(function (n) {
+    var p = NODES[n], info = NODE_INFO[n];
+    var g = el('g', { 'class': 'node ' + info[2], id: 'n-' + n }, svg);
+    el('circle', { cx: p[0], cy: p[1], r: n === 'c0' ? 17 : 19 }, g);
+    var t = el('text', { x: p[0], y: p[1] + 4 }, g); t.textContent = n;
+    var s = el('text', { x: p[0], y: p[1] + (n === 'c0' ? -26 : 34), 'class': 'sub' }, g); s.textContent = info[0];
+    var sub = el('text', { x: p[0], y: p[1] + (n === 'c0' ? -40 : 48), 'class': 'sub' }, g); sub.textContent = info[1];
+  });
+  el('text', { x: 290, y: 162, 'class': 'lbl' }, svg).textContent = 'primary';
+  el('text', { x: 290, y: 290, 'class': 'lbl', 'text-anchor': 'middle' }, svg).textContent = 'alternate path (s1-s3-s4)';
+  var pg = el('g', { id: 'pkts' }, svg);
+  var PKT_COLOR = { DATA: 'var(--ok)', RETX: 'var(--alt)', LOSSY: 'var(--accent)', ACK: 'var(--info)', NACK: 'var(--bad)', CTL: 'var(--muted)', DROP: 'var(--bad)' };
+  function pktKind(p) {
+    if (p.kind === 'DATA') { if (p.dead) return 'DROP'; return p.retx ? 'RETX' : 'DATA'; }
+    if (p.kind === 'ACK') return 'ACK';
+    if (p.kind === 'NACK') return 'NACK';
+    return 'CTL';
+  }
+  function drawTopo() {
+    Object.keys(linkEls).forEach(function (k) {
+      var L = linkEls[k], cls = 'lk';
+      if (L.kind === 'P' || L.kind === 'A') {
+        var m = S.imp[L.kind];
+        cls += ' ' + L.kind;
+        if (m.down) cls += ' down'; else if (m.loss > 0) cls += ' lossy';
+        if (S.rule.s1 === L.kind) cls += ' act';
+      } else if (L.kind === 'c') cls = 'lk c';
+      else cls = 'lk';
+      if (L.e.getAttribute('class') !== cls) L.e.setAttribute('class', cls);
+    });
+    ['s1', 's2', 's3', 's4', 'h1', 'h2', 'c0'].forEach(function (n) { /* node highlight */ });
+    var hot = S.rule.s1 === 'A' ? 's3' : 's2';
+    var g2 = $('n-s2'), g3 = $('n-s3');
+    if (g2) g2.setAttribute('class', 'node sw' + (hot === 's2' ? ' hot' : ''));
+    if (g3) g3.setAttribute('class', 'node sw' + (hot === 's3' ? ' hot' : ''));
+    pg.textContent = '';
+    S.pkts.forEach(function (p) {
+      p.segs.forEach(function (seg) {
+        if (S.t < seg.t0 || S.t > seg.t1) return;
+        var a = NODES[seg.a], b = NODES[seg.b];
+        if (!a || !b) return;
+        var f = (S.t - seg.t0) / Math.max(1e-6, seg.t1 - seg.t0);
+        var x = a[0] + (b[0] - a[0]) * f, y = a[1] + (b[1] - a[1]) * f;
+        var kind = seg.drop ? 'DROP' : pktKind(p);
+        var c = el('circle', { cx: x, cy: y, r: kind === 'DATA' || kind === 'RETX' ? 6 : 4.5, fill: PKT_COLOR[kind], 'class': 'pk' }, pg);
+        var ti = el('title', {}, c);
+        ti.textContent = p.kind + (p.kind === 'DATA' ? ' #' + p.seq + (p.retx ? ' (retransmit)' : '') : '') + (seg.drop ? ' · dropped on ' + seg.a + '-' + seg.b : '');
+      });
+    });
+  }
+
+  /* ---------- panels ---------- */
+  function renderSeq() {
+    var hi = S.rcv.highest, top = Math.max(S.seq - 1, hi), lo = Math.max(1, top - 47), html = '';
+    for (var s = lo; s <= top; s++) {
+      var c;
+      if (S.failedSet[s]) c = 'fail';
+      else if (s > hi) c = 'fly';
+      else if (!S.rcv.got[s]) c = 'miss';
+      else if (S.rcv.viaRetx[s]) c = 'retx';
+      else c = 'ok';
+      html += '<span class="sq ' + c + '" title="seq ' + s + '">' + s + '</span>';
+    }
+    $('seqgrid').innerHTML = html;
+  }
+  function renderPaths() {
+    ['P', 'A'].forEach(function (p) {
+      var e = S.ctl.est[p], pr = S.ctl.probe[p];
+      $('est-' + p).textContent = e == null ? '–' : pc(e, 0);
+      $('bar-' + p).style.width = (e == null ? 0 : Math.min(100, e * 100)) + '%';
+      $('probe-' + p).innerHTML = pr.map(function (ok) { return '<i class="' + (ok ? 'up' : 'dn') + '"></i>'; }).join('');
+      $('st-' + p).textContent = S.imp[p].down ? 'link down' : (S.imp[p].loss > 0 ? 'loss injected ' + pc(S.imp[p].loss, 0) : 'healthy');
+    });
+  }
+  function renderIncidents() {
+    var rows = S.incs.slice(-5).reverse().map(function (i) {
+      var d = function (v) { return v == null ? '–' : v.toFixed(2) + ' s'; };
+      var status = i.resolved ? esc(i.resolved) : (i.tClear != null ? 'recovered' : (i.tInstall != null ? 'rerouted, draining' : 'open'));
+      return '<tr><td>#' + i.id + '</td><td>' + esc(i.kind) + '</td><td>' + (i.path === 'P' ? 'primary' : 'alternate') + '</td>' +
+        '<td class="num">' + d(i.tDetect != null ? i.tDetect - i.t0 : null) + '</td>' +
+        '<td class="num">' + d(i.tInstall != null ? i.tInstall - i.t0 : null) + '</td>' +
+        '<td class="num">' + d(i.tFirst != null ? i.tFirst - i.t0 : null) + '</td>' +
+        '<td class="num">' + d(i.tClear != null ? i.tClear - i.t0 : null) + '</td><td>' + status + '</td></tr>';
+    }).join('');
+    $('inc-body').innerHTML = rows || '<tr><td colspan="8" class="muted">No incident yet. Inject loss above or break the primary link.</td></tr>';
+  }
+  function renderBanner() {
+    var inc = S.inc, b = $('banner');
+    if (inc && Eng.isOpen()) {
+      b.className = 'banner open';
+      b.textContent = 'Incident #' + inc.id + ' · ' + inc.kind + ' on ' + (inc.path === 'P' ? 'primary' : 'alternate') + ' · recovery clock ' + (S.t - inc.t0).toFixed(1) + ' s';
+    } else if (inc && inc.tClear != null) {
+      b.className = 'banner ok';
+      b.textContent = 'Incident #' + inc.id + ' recovered. Full backlog delivered in ' + (inc.tClear - inc.t0).toFixed(1) + ' s.';
+    } else if (inc) {
+      b.className = 'banner ok';
+      b.textContent = 'Incident #' + inc.id + ' ended: ' + (inc.resolved || 'fault cleared') + '.';
+    } else {
+      b.className = 'banner';
+      b.textContent = 'No active incident. Traffic flows on the ' + (S.rule.s1 === 'P' ? 'primary' : 'alternate') + ' path.';
+    }
+  }
+  function renderKpis() {
+    $('clk').textContent = S.t.toFixed(1);
+    $('spd-lbl').textContent = speed + '×';
+    $('k-sent').textContent = S.seq - 1;
+    $('k-del').textContent = S.rcv.deliv;
+    $('k-miss').textContent = Eng.missingCount();
+    $('k-retx').textContent = S.snd.retx;
+    var rec = Eng.lossIn(Math.max(0, S.t - 10), S.t + 1);
+    $('k-loss').textContent = pc(rec.p, 0);
+    $('k-rule').textContent = S.rule.s1 === 'P' ? 'primary' : 'alternate';
+    $('k-state').textContent = S.ctl.state;
+  }
+  function renderLog() {
+    var lg = S.log, key = lg.length + '|' + (lg.length ? lg[lg.length - 1].text : '');
+    if (key === lastLogKey) return;
+    lastLogKey = key;
+    $('log').innerHTML = lg.slice(-70).reverse().map(function (e) {
+      return '<div class="' + (e.cls || '') + '"><span class="ts">t=' + e.t.toFixed(2) + '</span> ' + esc(e.text) + '</div>';
+    }).join('') || '<div class="muted">Waiting for traffic.</div>';
+  }
+  function drawChart() {
+    var cv = $('chart'), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = cv.clientWidth, h = cv.clientHeight;
+    if (!w || !h) return;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    var g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    var L = 40, R = 10, T = 10, B = 22, pw = w - L - R, ph = h - T - B;
+    var t1 = Math.max(90, S.t + 1), t0 = t1 - 90;
+    function X(t) { return L + (t - t0) / (t1 - t0) * pw; }
+    function Y(v) { return T + ph - Math.min(1, Math.max(0, v)) * ph; }
+    g.font = '11px "IBM Plex Mono", monospace';
+    g.strokeStyle = css('--line'); g.fillStyle = css('--muted'); g.lineWidth = 1;
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (v) {
+      g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(w - R, Y(v)); g.stroke();
+      g.fillText(Math.round(v * 100) + '%', 4, Y(v) + 4);
+    });
+    var rows = S.hist.filter(function (r) { return r.t >= t0 - 1; });
+    // alternate-path band
+    g.fillStyle = 'rgba(127,178,255,0.12)';
+    rows.forEach(function (r, i) {
+      if (r.rule !== 'A') return;
+      g.fillRect(X(r.t - 1), T, X(r.t) - X(r.t - 1), ph);
+    });
+    // threshold
+    g.setLineDash([5, 4]); g.strokeStyle = css('--accent'); g.beginPath(); g.moveTo(L, Y(0.2)); g.lineTo(w - R, Y(0.2)); g.stroke(); g.setLineDash([]);
+    // loss line
+    g.strokeStyle = css('--bad'); g.lineWidth = 2; g.beginPath();
+    rows.forEach(function (r, i) {
+      var v = r.tx ? r.drop / r.tx : 0, x = X(r.t), y = Y(v);
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    });
+    g.stroke(); g.lineWidth = 1;
+    // time labels
+    g.fillStyle = css('--muted');
+    for (var tt = Math.ceil(t0 / 15) * 15; tt <= t1; tt += 15) g.fillText(tt + 's', X(tt) - 8, h - 6);
+  }
+
+  function paint() {
+    renderKpis(); renderBanner(); renderSeq(); renderPaths(); renderIncidents(); renderLog(); drawChart();
+  }
+
+  /* ---------- loop ---------- */
+  function frame(now) {
+    var dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
+    if (playing) Eng.advance(dt * speed);
+    drawTopo();
+    paintAcc += dt;
+    if (paintAcc > 0.2) { paintAcc = 0; paint(); }
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- controls ---------- */
+  function setPressed(btn, on) { btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  $('btn-play').addEventListener('click', function () {
+    playing = !playing; this.textContent = playing ? 'Pause' : 'Play'; setPressed(this, playing);
+  });
+  document.querySelectorAll('[data-speed]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      speed = +this.getAttribute('data-speed');
+      document.querySelectorAll('[data-speed]').forEach(function (x) { setPressed(x, x === b); });
+    });
+  });
+  $('btn-burst').addEventListener('click', function () { Eng.burst(20); });
+  $('btn-demo').addEventListener('click', function () { Eng.demo(); });
+  $('btn-down').addEventListener('click', function () { Eng.setDown('P', true); });
+  $('btn-up').addEventListener('click', function () { Eng.setDown('P', false); });
+  $('btn-dyn').addEventListener('click', function () {
+    var on = !S.cfg.dynamic; Eng.setCfg('dynamic', on);
+    this.textContent = 'SDN reroute: ' + (on ? 'on' : 'off'); setPressed(this, on);
+  });
+  $('btn-reset').addEventListener('click', function () {
+    var dyn = S.cfg.dynamic;
+    S = Eng.reset(7, { dynamic: dyn });
+    lastLogKey = '';
+  });
+  ['P', 'A'].forEach(function (p) {
+    var inp = $('loss-' + p), out = $(('loss-' + p) + '-out');
+    inp.addEventListener('input', function () { out.textContent = this.value + '%'; });
+    inp.addEventListener('change', function () { Eng.setLoss(p, +this.value); });
+  });
+
+  /* ---------- scenarios and comparison ---------- */
+  var SCN = [
+    { id: 'A', name: '10% loss, primary', T: 50, faultT: 5, script: [{ t: 5, act: 'loss', path: 'P', pct: 10 }] },
+    { id: 'B', name: '30% loss, primary', T: 60, faultT: 10, script: [{ t: 10, act: 'loss', path: 'P', pct: 30 }] },
+    { id: 'C', name: '60% loss, primary', T: 60, faultT: 15, script: [{ t: 15, act: 'loss', path: 'P', pct: 60 }] },
+    { id: 'D', name: 'Primary link down', T: 60, faultT: 15, script: [{ t: 15, act: 'down', path: 'P', v: true }] }
+  ];
+  var SEEDS = [1, 2, 3];
+  function runScn(sc, dyn) {
+    var rs = SEEDS.map(function (seed) {
+      return Eng.run({ seed: seed, T: sc.T, faultT: sc.faultT, script: sc.script, cfg: dyn ? {} : { dynamic: false } });
+    });
+    function avg(f) {
+      var v = rs.map(f).filter(function (x) { return x != null && !isNaN(x); });
+      return v.length ? v.reduce(function (a, b) { return a + b; }, 0) / v.length : null;
+    }
+    return {
+      pre: avg(function (r) { return r.lossPre; }),
+      dur: avg(function (r) { return r.lossDur; }),
+      post: avg(function (r) { return r.lossPost; }),
+      resid: avg(function (r) { return r.residual; }),
+      lat: avg(function (r) { return r.avgLat; }),
+      ovh: avg(function (r) { return r.overhead; }),
+      install: avg(function (r) { return r.inc && r.inc.install; }),
+      clear: avg(function (r) { return r.inc && r.inc.clear; }),
+      gp: avg(function (r) { return r.goodputPost; }),
+      detect: avg(function (r) { return r.inc && r.inc.detect; }),
+      installN: rs.filter(function (r) { return r.inc && r.inc.install != null; }).length
+    };
+  }
+  var RES = SCN.map(function (sc) { return { sc: sc, dyn: runScn(sc, true), sta: runScn(sc, false) }; });
+
+  function renderCompare() {
+    var rows = '';
+    RES.forEach(function (r) {
+      [['SDN reroute', r.dyn], ['Static', r.sta]].forEach(function (pair, i) {
+        var m = pair[1];
+        rows += '<tr' + (i === 0 ? ' class="group"' : '') + '><td>' + (i === 0 ? r.sc.id + ' · ' + esc(r.sc.name) : '') + '</td>' +
+          '<td>' + pair[0] + '</td>' +
+          '<td class="num">' + pc(m.pre) + '</td>' +
+          '<td class="num">' + pc(m.dur) + '</td>' +
+          '<td class="num">' + pc(m.post) + '</td>' +
+          '<td class="num">' + pc(m.resid) + '</td>' +
+          '<td class="num">' + (m.installN ? sec(m.install) : 'never') + '</td>' +
+          '<td class="num">' + (m.clear != null ? sec(m.clear) : 'not cleared') + '</td>' +
+          '<td class="num">' + sec(m.lat) + '</td>' +
+          '<td class="num">' + pc(m.ovh) + '</td></tr>';
+      });
+    });
+    $('cmp-body').innerHTML = rows;
+
+    function bars(id, pick, max, fmt, color) {
+      var html = '';
+      RES.forEach(function (r) {
+        [['SDN', r.dyn, color[0]], ['Static', r.sta, color[1]]].forEach(function (x) {
+          var v = pick(x[1]);
+          var w = v == null ? 0 : Math.min(100, v / max * 100);
+          html += '<div class="cb"><span class="lab">' + r.sc.id + ' · ' + x[0] + '</span><div class="t"><b style="width:' + w + '%;background:' + x[2] + '"></b></div><span class="n">' + (v == null ? 'never' : fmt(v)) + '</span></div>';
+        });
+      });
+      $(id).innerHTML = html;
+    }
+    bars('bars-loss', function (m) { return m.post; }, 0.6, function (v) { return pc(v); }, ['var(--ok)', 'var(--bad)']);
+    bars('bars-gp', function (m) { return m.gp; }, 8, function (v) { return v.toFixed(2) + '/s'; }, ['var(--ok)', 'var(--bad)']);
+
+    var recHtml = '';
+    RES.forEach(function (r) {
+      var v = r.dyn.install;
+      var w = v == null ? 0 : Math.min(100, v / 8 * 100);
+      recHtml += '<div class="cb"><span class="lab">' + r.sc.id + ' · ' + esc(r.sc.name) + '</span><div class="t"><b style="width:' + w + '%;background:var(--info)"></b></div><span class="n">' + sec(v) + '</span></div>';
+    });
+    $('bars-rec').innerHTML = recHtml;
+    var all = RES.map(function (r) { return r.dyn.install; }).filter(function (x) { return x != null; }).sort(function (a, b) { return a - b; });
+    var med = all.length ? all[Math.floor(all.length / 2)] : null;
+    $('hf-rec').textContent = med == null ? '–' : med.toFixed(1) + ' s';
+    $('rec-note').textContent = 'Recovery to alternate path: median ' + (med == null ? '–' : med.toFixed(2) + ' s') + '. Static runs never reroute, so they have no recovery time.';
+
+    var b = RES[1], c = RES[2], d = RES[3];
+    $('finding-1').textContent = 'Under a 30% loss fault, loss after 15 s falls from ' + pc(b.dyn.dur) + ' during the fault to ' + pc(b.dyn.post) + ' with SDN, against ' + pc(b.sta.post) + ' with a static path.';
+    $('finding-2').textContent = 'With the primary link down, SDN reroutes in ' + sec(d.dyn.install) + ' via PORT_STATUS and finishes clearing the backlog at ' + sec(d.dyn.clear) + '. The static network never recovers: ' + pc(d.sta.post) + ' of packets are still lost after 15 s.';
+    $('finding-3').textContent = 'The cost is retransmissions. At 60% loss, SDN sends ' + pc(c.dyn.ovh, 0) + ' of packets as retransmits, against ' + pc(c.sta.ovh, 0) + ' static. Most of that overhead is the price of getting packets across a bad path.';
+  }
+
+
+  /* ---------- code and copy ---------- */
+  var CODE = {"topo": "\"\"\"topo.py - two-path topology for the packet-loss experiment.\n\n    h1 (10.0.0.1) -- s1 ==== s2 ==== s4 -- h2 (10.0.0.2)     primary path\n                    s1 ==== s3 ====/                          alternate path\n                    ctl (10.0.0.254, NAT interface, added by run_experiment.py)\n\nMininet numbers switch ports in the order links are added. The controller\n(pathguard.py) depends on these port numbers:\n\n    s1: port 1 = h1, port 2 = s2 (primary), port 3 = s3 (alternate)\n    s2: port 1 = s1, port 2 = s4\n    s3: port 1 = s1, port 2 = s4\n    s4: port 1 = s2, port 2 = s3, port 3 = h2, port 4 = ctl (added last)\n\nrun_experiment.py checks these numbers at start-up (see check_ports()).\n\"\"\"\nimport os\n\nfrom mininet.topo import Topo\n\n# OVS datapath: \"kernel\" (default, needs the openvswitch kernel module) or \"user\"\n# (userspace datapath, for VMs without that module). Set MN_DATAPATH=user to use it.\nDATAPATH = os.environ.get('MN_DATAPATH', 'kernel')\n\n# Link delays use tc netem. On kernels without sch_netem, set MN_NETEM=0 to build the\n# same topology without delays (the path roles and port numbers do not change).\nUSE_NETEM = os.environ.get('MN_NETEM', '1') != '0'\nPRIMARY_DELAY = \"3ms\" if USE_NETEM else None\nALTERNATE_DELAY = '5ms' if USE_NETEM else None\n\n\nclass PathTopo(Topo):\n    @staticmethod\n    def _d(delay):\n        return {'delay': delay} if delay else {}\n\n    def build(self):\n        h1 = self.addHost('h1', ip='10.0.0.1/24')\n        h2 = self.addHost('h2', ip='10.0.0.2/24')\n        s1 = self.addSwitch('s1', protocols='OpenFlow13', datapath=DATAPATH)\n        s2 = self.addSwitch('s2', protocols='OpenFlow13', datapath=DATAPATH)\n        s3 = self.addSwitch('s3', protocols='OpenFlow13', datapath=DATAPATH)\n        s4 = self.addSwitch('s4', protocols='OpenFlow13', datapath=DATAPATH)\n        self.addLink(h1, s1)\n        self.addLink(s1, s2, **self._d(PRIMARY_DELAY))     # primary leg 1\n        self.addLink(s2, s4, **self._d(PRIMARY_DELAY))     # primary leg 2\n        self.addLink(s1, s3, **self._d(ALTERNATE_DELAY))   # alternate leg 1\n        self.addLink(s3, s4, **self._d(ALTERNATE_DELAY))   # alternate leg 2\n        self.addLink(s4, h2)\n\n\ntopos = {'pathtopo': PathTopo}\n", "run": "#!/usr/bin/env python3\n\"\"\"run_experiment.py - builds the two-path topology, runs sender (h1) and\nreceiver (h2), injects one fault on the primary path, and saves logs.\n\nRun as root, with run_controller.py already running in another terminal:\n\n    sudo python3 run_experiment.py --out results/sdn_loss60_r1 --fault loss --loss 60\n    sudo python3 run_experiment.py --out results/static_down_r1 --fault down\n    sudo python3 run_experiment.py --out results/none_r1 --fault none\n\nOutput directory gets: sender_log.json, receiver_log.json, fault.json,\nrun_info.json. Analyse with:  python3 analyze.py results/<dir>\n\"\"\"\nimport argparse\nimport json\nimport os\nimport subprocess\nimport sys\nimport time\n\nfrom mininet.link import TCLink\nfrom mininet.log import setLogLevel\nfrom mininet.net import Mininet\nfrom mininet.node import RemoteController\n\nfrom topo import PRIMARY_DELAY, PathTopo\n\nHERE = os.path.dirname(os.path.abspath(__file__))\nCTL_IP = '10.0.0.254'\nEXPECTED_PORTS = {          # must match the comments in topo.py and the constants in pathguard.py\n    's1': {1: 'h1', 2: 's2', 3: 's3'},\n    's2': {1: 's1', 2: 's4'},\n    's3': {1: 's1', 2: 's4'},\n    's4': {1: 's2', 2: 's3', 3: 'h2', 4: 'ctl'},\n}\n\n\ndef peer_at(node, port):\n    intf = node.intfs.get(port)\n    if intf is None or intf.link is None:\n        return None\n    other = intf.link.intf2 if intf.link.intf1 is intf else intf.link.intf1\n    return other.node.name\n\n\ndef check_ports(net):\n    for sw, expect in EXPECTED_PORTS.items():\n        for port, peer in expect.items():\n            got = peer_at(net.get(sw), port)\n            if got != peer:\n                raise SystemExit('port map mismatch: %s port %d is %r, expected %r' % (sw, port, got, peer))\n\n\ndef main():\n    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)\n    ap.add_argument('--out', required=True, help='directory for the logs of this run')\n    ap.add_argument('--fault', choices=['none', 'loss', 'meter', 'down'], default='loss',\n                    help=\"loss = tc netem on s1-s2 (needs the sch_netem kernel module); \"\n                         \"meter = OpenFlow meter on s2 that drops packets above --meter-pps \"\n                         \"(fallback when netem is unavailable)\")\n    ap.add_argument('--meter-pps', type=int, default=3, help='packets/s allowed through s2 (fault=meter)')\n    ap.add_argument('--loss', type=float, default=60.0, help='loss %% on the primary path (fault=loss)')\n    ap.add_argument('--fault-at', type=float, default=15.0, help='seconds after sending starts')\n    ap.add_argument('--duration', type=float, default=60.0, help='seconds of sending')\n    ap.add_argument('--rate', type=float, default=8.0, help='datagrams per second')\n    a = ap.parse_args()\n    if os.geteuid() != 0:\n        raise SystemExit('run as root (sudo)')\n\n    out = os.path.abspath(a.out)\n    os.makedirs(out, exist_ok=True)\n    setLogLevel('warning')\n\n    net = Mininet(topo=PathTopo(), link=TCLink, controller=None, autoSetMacs=True, autoStaticArp=True)\n    net.addController('c0', controller=RemoteController, ip='127.0.0.1', port=6633)\n    # the controller's report address: a root-namespace node, so the OS-Ken\n    # process (run outside Mininet) can receive REPORT datagrams from h2\n    ctl = net.addHost('ctl', inNamespace=False)\n    net.addLink(ctl, net.get('s4'))          # added last, so it becomes s4 port 4\n    net.start()\n    try:\n        try:\n            net.waitConnected(timeout=30)\n        except Exception:\n            pass\n        # waitConnected() only prints a warning on timeout, so check the switches directly\n        missing = [sw.name for sw in net.switches if not sw.connected()]\n        if missing:\n            raise SystemExit('switches did not connect to the controller (is run_controller.py running?): %s'\n                             % ', '.join(missing))\n        check_ports(net)\n        ctl.cmd('ip addr add %s/24 dev ctl-eth0' % CTL_IP)\n        ctl.cmd('ip link set ctl-eth0 up')\n        h1, h2 = net.get('h1', 'h2')\n        for h in (h1, h2):   # veth checksum offload leaves UDP checksums unfinished for the switch\n            h.cmd('ethtool -K %s-eth0 tx off rx off' % h.name)\n        ctl_mac = ctl.intf().MAC()\n        h1.cmd('arp -s %s %s' % (CTL_IP, ctl_mac))\n        h2.cmd('arp -s %s %s' % (CTL_IP, ctl_mac))\n\n        rx_log = os.path.join(out, 'receiver_log.json')\n        tx_log = os.path.join(out, 'sender_log.json')\n        rx = h2.popen(['python3', os.path.join(HERE, 'receiver.py'),\n                       '--duration', str(a.duration + 20), '--log', rx_log],\n                      stdout=open(os.path.join(out, 'receiver.out'), 'w'), stderr=subprocess.STDOUT)\n        time.sleep(1.0)\n        tx = h1.popen(['python3', os.path.join(HERE, 'sender.py'),\n                       '--duration', str(a.duration), '--rate', str(a.rate), '--log', tx_log],\n                      stdout=open(os.path.join(out, 'sender.out'), 'w'), stderr=subprocess.STDOUT)\n\n        start = time.time()\n        time.sleep(a.fault_at)\n        fault = {'fault': a.fault, 't': time.time(), 'loss_pct': a.loss if a.fault == 'loss' else None,\n                 'meter_pps': a.meter_pps if a.fault == 'meter' else None}\n        if a.fault == 'loss':\n            link = net.linksBetween(net.get('s1'), net.get('s2'))[0]\n            link.intf1.config(delay=PRIMARY_DELAY, loss=a.loss)\n            link.intf2.config(delay=PRIMARY_DELAY, loss=a.loss)\n        elif a.fault == 'meter':\n            s2 = net.get('s2').name\n            os.system('ovs-ofctl -O OpenFlow13 add-meter %s meter=1,pktps,burst,band=type=drop,rate=%d,burst_size=1'\n                      % (s2, a.meter_pps))\n            os.system('ovs-ofctl -O OpenFlow13 add-flow %s \"priority=6,ip,nw_dst=10.0.0.2,actions=meter:1,output:2\"'\n                      % s2)\n        elif a.fault == 'down':\n            net.configLinkStatus('s1', 's2', 'down')\n        with open(os.path.join(out, 'fault.json'), 'w') as f:\n            json.dump(fault, f)\n        print('fault injected: %s' % fault, flush=True)\n\n        tx.wait()\n        rx.wait()\n        with open(os.path.join(out, 'run_info.json'), 'w') as f:\n            json.dump({'args': vars(a), 'start': start, 'controller_events': 'controller_events.jsonl'}, f, indent=1)\n        print('run complete, logs in %s' % out, flush=True)\n    finally:\n        net.stop()\n\n\nif __name__ == '__main__':\n    main()\n", "sender": "#!/usr/bin/env python3\n\"\"\"sender.py - runs on h1. Streams numbered UDP datagrams to h2 and recovers\nlosses with NACK-triggered and timeout-triggered retransmission.\n\nWire format (network byte order):\n  DATA  !B I d d B   type=0, seq, first-send time, this-send time, attempt (0 = first)\n  ACK   !B I H       type=1, cumulative seq, count, then count x I (SACK seqs)\n  NACK  !B H         type=2, count, then count x I (missing seqs)\n\"\"\"\nimport argparse\nimport json\nimport socket\nimport struct\nimport time\n\nDATA, ACK, NACK = 0, 1, 2\nDATA_HDR = struct.Struct('!BIddB')\nACK_HDR = struct.Struct('!BIH')\nNACK_HDR = struct.Struct('!BH')\n\n\ndef main():\n    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)\n    ap.add_argument('--bind', default='10.0.0.1', help='local address to bind (h1)')\n    ap.add_argument('--dest', default='10.0.0.2', help='receiver address (h2)')\n    ap.add_argument('--port', type=int, default=9000, help='receiver data port')\n    ap.add_argument('--ack-port', type=int, default=9001, help='local port for ACK/NACK')\n    ap.add_argument('--rate', type=float, default=8.0, help='new datagrams per second')\n    ap.add_argument('--duration', type=float, default=60.0, help='seconds of new traffic')\n    ap.add_argument('--payload', type=int, default=64, help='datagram size in bytes')\n    ap.add_argument('--rto', type=float, default=3.0, help='base retransmission timeout (s)')\n    ap.add_argument('--max-retry', type=int, default=5, help='retransmissions before abandoning')\n    ap.add_argument('--drain', type=float, default=10.0, help='seconds to wait for ACKs after sending stops')\n    ap.add_argument('--log', default='sender_log.json')\n    a = ap.parse_args()\n\n    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n    sock.bind((a.bind, a.ack_port))\n    sock.settimeout(0.02)\n    dest = (a.dest, a.port)\n    pad = b'x' * max(0, a.payload - DATA_HDR.size)\n\n    unacked = {}       # seq -> {'tx': last send time, 'retries': n}\n    first_send = {}    # seq -> time of first transmission\n    stats = {'sent': 0, 'retx': 0, 'ack_rx': 0, 'nack_rx': 0, 'abandoned': 0}\n\n    def transmit(seq, attempt, now):\n        first = first_send.get(seq, now)\n        sock.sendto(DATA_HDR.pack(DATA, seq, first, now, attempt) + pad, dest)\n\n    def retransmit(seq, now):\n        e = unacked.get(seq)\n        if e is None:\n            return\n        if e['retries'] >= a.max_retry:\n            del unacked[seq]\n            stats['abandoned'] += 1\n            return\n        e['retries'] += 1\n        e['tx'] = now\n        stats['retx'] += 1\n        transmit(seq, e['retries'], now)\n\n    start = time.time()\n    stop_new = start + a.duration\n    hard_stop = stop_new + a.drain\n    interval = 1.0 / a.rate\n    next_send = start\n    seq = 0\n\n    while True:\n        now = time.time()\n        if now < stop_new and now >= next_send:\n            seq += 1\n            unacked[seq] = {'tx': now, 'retries': 0}\n            first_send[seq] = now\n            transmit(seq, 0, now)\n            stats['sent'] += 1\n            next_send += interval\n        if (now >= stop_new and not unacked) or now >= hard_stop:\n            break\n\n        # timer-driven retransmission with exponential backoff, capped at 8 s\n        for s in list(unacked):\n            e = unacked.get(s)\n            if e and now - e['tx'] > min(8.0, a.rto * 1.4 ** e['retries']):\n                retransmit(s, now)\n\n        try:\n            data, _ = sock.recvfrom(2048)\n        except socket.timeout:\n            continue\n        if not data:\n            continue\n        try:\n            if data[0] == ACK:\n                _, cum, n = ACK_HDR.unpack_from(data)\n                sacks = struct.unpack_from('!%dI' % n, data, ACK_HDR.size)\n                stats['ack_rx'] += 1\n                for s in [k for k in unacked if k <= cum]:\n                    del unacked[s]\n                for s in sacks:\n                    unacked.pop(s, None)\n            elif data[0] == NACK:\n                _, n = NACK_HDR.unpack_from(data)\n                stats['nack_rx'] += 1\n                for s in struct.unpack_from('!%dI' % n, data, NACK_HDR.size):\n                    e = unacked.get(s)\n                    # ignore a NACK for a packet resent in the last 0.5 s (one burst, one resend)\n                    if e and now - e['tx'] >= 0.5:\n                        retransmit(s, now)\n        except struct.error:\n            continue  # malformed datagram: ignore\n\n    sock.close()\n    stats['still_unacked'] = len(unacked)\n    stats['duration_s'] = round(time.time() - start, 3)\n    with open(a.log, 'w') as f:\n        json.dump({'stats': stats, 'first_send': {str(k): v for k, v in first_send.items()},\n                   'stop_new_at': stop_new}, f)\n    print('sender done', stats, flush=True)\n\n\nif __name__ == '__main__':\n    main()\n", "receiver": "#!/usr/bin/env python3\n\"\"\"receiver.py - runs on h2. Tracks sequence numbers, detects gaps, sends\nACK/NACK back to h1, counts arrivals per path (from the IP DSCP mark set by\nthe switch) and reports those counts to the controller.\n\nPath marks: DSCP 10 = primary path, DSCP 20 = alternate path (set on s1).\n\"\"\"\nimport argparse\nimport json\nimport select\nimport socket\nimport struct\nimport time\n\nDATA, ACK, NACK, PROBE = 0, 1, 2, 3\nDATA_HDR = struct.Struct('!BIddB')\nPROBE_HDR = struct.Struct('!BI')\nACK_HDR = struct.Struct('!BIH')\nNACK_HDR = struct.Struct('!BH')\nIP_RECVTOS = 13          # Linux: ask the kernel to pass the IP TOS byte with each datagram\nDSCP_PATHS = (10, 20)    # 10 = primary, 20 = alternate\n\n\ndef recv_with_dscp(sock):\n    data, anc, _flags, addr = sock.recvmsg(2048, 256)\n    dscp = None\n    for level, typ, val in anc:\n        if level == socket.IPPROTO_IP and typ == socket.IP_TOS:\n            dscp = val[0] >> 2\n    return data, dscp, addr\n\n\ndef main():\n    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)\n    ap.add_argument('--bind', default='0.0.0.0')\n    ap.add_argument('--data-port', type=int, default=9000)\n    ap.add_argument('--probe-port', type=int, default=9002)\n    ap.add_argument('--sender', default='10.0.0.1')\n    ap.add_argument('--ack-port', type=int, default=9001)\n    ap.add_argument('--ctl', default='10.0.0.254', help='controller address (reachable from h2)')\n    ap.add_argument('--report-port', type=int, default=9100)\n    ap.add_argument('--wait', type=float, default=0.25, help='reorder wait before a gap is NACKed (s)')\n    ap.add_argument('--nack-gap', type=float, default=1.8, help='re-NACK interval for a missing seq (s)')\n    ap.add_argument('--ack-every', type=float, default=0.5)\n    ap.add_argument('--report-every', type=float, default=0.5)\n    ap.add_argument('--duration', type=float, default=70.0)\n    ap.add_argument('--log', default='receiver_log.json')\n    a = ap.parse_args()\n\n    data_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n    data_sock.setsockopt(socket.IPPROTO_IP, IP_RECVTOS, 1)\n    data_sock.bind((a.bind, a.data_port))\n    probe_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n    probe_sock.setsockopt(socket.IPPROTO_IP, IP_RECVTOS, 1)\n    probe_sock.bind((a.bind, a.probe_port))\n    out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)   # ACK, NACK and REPORT go out from here\n\n    got = set()\n    highest = cum = dups = delivered = 0\n    gap_t, last_nack = {}, {}\n    rx = {d: 0 for d in DSCP_PATHS}        # cumulative data arrivals per path\n    prx = {d: 0 for d in DSCP_PATHS}       # cumulative probe arrivals per path\n    arrivals = []                          # [t, seq, dscp, attempt, first_send, this_send]\n    last_ack = last_rep = 0.0\n    end = time.time() + a.duration\n\n    while time.time() < end:\n        ready, _, _ = select.select([data_sock, probe_sock], [], [], 0.05)\n        for s in ready:\n            pkt, dscp, _ = recv_with_dscp(s)\n            now = time.time()\n            if s is probe_sock:\n                if len(pkt) >= PROBE_HDR.size and dscp in prx:\n                    prx[dscp] += 1\n                continue\n            if len(pkt) < DATA_HDR.size or pkt[0] != DATA:\n                continue\n            _, seq, first_t, this_t, attempt = DATA_HDR.unpack_from(pkt)\n            if dscp in rx:\n                rx[dscp] += 1\n            arrivals.append([round(now, 6), seq, dscp, attempt, first_t, this_t])\n            if seq in got:\n                dups += 1\n                continue\n            got.add(seq)\n            delivered += 1\n            if seq > highest:\n                for x in range(highest + 1, seq):\n                    gap_t.setdefault(x, now)       # a hole opens here\n                highest = seq\n            while cum + 1 in got:\n                cum += 1\n\n        now = time.time()\n        if highest and now - last_ack >= a.ack_every:\n            sack = sorted((x for x in got if x > cum), reverse=True)[:24]\n            out.sendto(ACK_HDR.pack(ACK, cum, len(sack)) +\n                       struct.pack('!%dI' % len(sack), *sack), (a.sender, a.ack_port))\n            last_ack = now\n\n        missing = [x for x in range(cum + 1, highest)\n                   if x not in got\n                   and now - gap_t.get(x, now) >= a.wait\n                   and now - last_nack.get(x, -9.0) >= a.nack_gap][:16]\n        if missing:\n            for x in missing:\n                last_nack[x] = now\n            out.sendto(NACK_HDR.pack(NACK, len(missing)) +\n                       struct.pack('!%dI' % len(missing), *missing), (a.sender, a.ack_port))\n\n        if now - last_rep >= a.report_every:\n            body = json.dumps({'rx': {str(k): v for k, v in rx.items()},\n                               'probe': {str(k): v for k, v in prx.items()},\n                               'highest': highest, 'delivered': delivered}).encode()\n            out.sendto(body, (a.ctl, a.report_port))\n            last_rep = now\n\n    with open(a.log, 'w') as f:\n        json.dump({'delivered': delivered, 'dups': dups, 'highest': highest, 'cum': cum,\n                   'rx': rx, 'probe_rx': prx, 'arrivals': arrivals}, f)\n    print('receiver done delivered=%d dups=%d highest=%d' % (delivered, dups, highest), flush=True)\n\n\nif __name__ == '__main__':\n    main()\n", "ctl": "\"\"\"pathguard.py - OS-Ken SDN application for the packet-loss experiment.\n\nResponsibilities\n  1. Install base forwarding on s1..s4 for the 10.0.0.x hosts and the controller.\n  2. Monitor both paths:\n       - data loss on the ACTIVE path = packets counted leaving s1 (flow stats)\n         versus packets counted arriving at h2 (REPORT from receiver.py);\n       - path health for BOTH paths from probe packets the controller injects at s1\n         with packet-out (one per path per poll); arrivals counted at h2.\n  3. Reroute: on loss above 20% for two consecutive polls, or on PORT_STATUS\n     link-down of the active primary port, move data (s1) and ACK return (s4) to the\n     alternate path with priority-200 flows. Fail back to the primary path after\n     6 s with healthy primary probes.\n\nSet PATHGUARD_STATIC=1 to disable rerouting (static baseline; monitoring still logs).\nEvents are appended as JSON lines to PATHGUARD_EVENTS (default controller_events.jsonl).\n\"\"\"\nimport json\nimport os\nimport socket\nimport time\n\nfrom os_ken.base import app_manager\nfrom os_ken.controller import ofp_event\nfrom os_ken.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER, set_ev_cls\nfrom os_ken.lib import hub\nfrom os_ken.lib.packet import ethernet, ipv4, packet, udp\nfrom os_ken.ofproto import ofproto_v1_3\n\nPRIMARY, ALT = 'P', 'A'\nS1, S2, S3, S4 = 1, 2, 3, 4          # datapath ids = Mininet switch numbers\nOUT = {PRIMARY: 2, ALT: 3}           # s1 output ports towards s2 / s3\nDSCP = {PRIMARY: 10, ALT: 20}        # mark written on s1 (and on probes)\nH1_IP, H2_IP, CTL_IP = '10.0.0.1', '10.0.0.2', '10.0.0.254'\nH2_MAC, CTL_MAC = '00:00:00:00:00:02', '00:00:00:00:00:fe'\nS4_CTL_PORT = 4                      # NAT port on s4 (added last in run_experiment.py)\nDATA_PORT, ACK_PORT, PROBE_PORT, REPORT_PORT = 9000, 9001, 9002, 9100\nPRIO_BASE, PRIO_REROUTE = 10, 200\n\nPOLL = 0.5                           # seconds between polls\nWINDOW = 8                           # polls in the loss window (4 s)\nMIN_SAMPLES = 24                    # packets needed in the window before a loss estimate is used\nTHRESH = 0.20                        # degradation threshold\nCONSEC = 4                           # consecutive bad polls (2 s) before rerouting\nPROBE_WINDOW = 8                     # polls in the probe window (4 s)\nLAG = 2                              # newest polls skipped: packets sent in them may not have arrived yet (1 s)\nPROBE_OK = 0.8                       # healthy if at least this share of probes arrived\nFAILBACK_AFTER = 6.0                 # seconds on the alternate path before failback is allowed\n\nSTATIC = os.environ.get('PATHGUARD_STATIC', '0') == '1'\nEVENTS = os.environ.get('PATHGUARD_EVENTS', 'controller_events.jsonl')\n\n\nclass PathGuard(app_manager.OSKenApp):\n    OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]\n\n    def __init__(self, *args, **kwargs):\n        super().__init__(*args, **kwargs)\n        self.dps = {}\n        self.active = PRIMARY\n        self.switched_at = 0.0\n        self.bad_polls = 0\n        self.link_down = {PRIMARY: False, ALT: False}\n        # data counters: cumulative totals per path, folded from flow stats and receiver reports\n        self.flow_last = {PRIMARY: 0, ALT: 0}\n        self.sent = {PRIMARY: 0, ALT: 0}\n        self.rx = {PRIMARY: 0, ALT: 0}\n        self.prev = {'sent': {PRIMARY: 0, ALT: 0}, 'rx': {PRIMARY: 0, ALT: 0},\n                     'psent': {PRIMARY: 0, ALT: 0}, 'prx': {PRIMARY: 0, ALT: 0}}\n        self.probe_sent = {PRIMARY: 0, ALT: 0}\n        self.probe_rx = {PRIMARY: 0, ALT: 0}\n        self.hist = {PRIMARY: [], ALT: []}          # per poll: (sent, rx)\n        self.phist = {PRIMARY: [], ALT: []}         # per poll: (probes sent, probes received)\n        self.events_fh = open(EVENTS, 'a', buffering=1)\n        self.event('start', static=STATIC)\n        hub.spawn(self.report_listener)\n        hub.spawn(self.monitor_loop)\n\n    # ----------------------------------------------------------- logging\n    def event(self, kind, **kw):\n        rec = dict(t=round(time.time(), 6), kind=kind, active=self.active, **kw)\n        self.events_fh.write(json.dumps(rec) + '\\n')\n        self.logger.info('%s %s', kind, kw)\n\n    # ----------------------------------------------------------- switch setup\n    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)\n    def on_features(self, ev):\n        dp = ev.msg.datapath\n        self.dps[dp.id] = dp\n        p = dp.ofproto_parser\n        if dp.id == S1:\n            self.add_flow(dp, PRIO_BASE,\n                          dict(eth_type=0x0800, ipv4_dst=H2_IP, ip_proto=17, udp_dst=DATA_PORT),\n                          [p.OFPActionSetField(ip_dscp=DSCP[PRIMARY]), p.OFPActionOutput(OUT[PRIMARY])])\n            self.add_flow(dp, 5, dict(eth_type=0x0800, ipv4_dst=H2_IP), [p.OFPActionOutput(OUT[PRIMARY])])\n            self.add_flow(dp, 5, dict(eth_type=0x0800, ipv4_dst=H1_IP), [p.OFPActionOutput(1)])\n        elif dp.id in (S2, S3):\n            self.add_flow(dp, 5, dict(eth_type=0x0800, ipv4_dst=H2_IP), [p.OFPActionOutput(2)])\n            self.add_flow(dp, 5, dict(eth_type=0x0800, ipv4_dst=H1_IP), [p.OFPActionOutput(1)])\n        elif dp.id == S4:\n            self.add_flow(dp, 5, dict(eth_type=0x0800, ipv4_dst=H2_IP), [p.OFPActionOutput(3)])\n            self.add_flow(dp, 5, dict(eth_type=0x0800, ipv4_dst=H1_IP), [p.OFPActionOutput(1)])\n            self.add_flow(dp, 5, dict(eth_type=0x0800, ipv4_dst=CTL_IP), [p.OFPActionOutput(S4_CTL_PORT)])\n        self.event('switch_up', dpid=dp.id)\n\n    def add_flow(self, dp, prio, match_kw, actions, command=None):\n        p, ofp = dp.ofproto_parser, dp.ofproto\n        match = p.OFPMatch(**match_kw)\n        if command is None:\n            inst = [p.OFPInstructionActions(ofp.OFPIT_APPLY_ACTIONS, actions)]\n            msg = p.OFPFlowMod(datapath=dp, priority=prio, match=match, instructions=inst,\n                               command=ofp.OFPFC_ADD)\n        else:\n            msg = p.OFPFlowMod(datapath=dp, priority=prio, match=match, command=command,\n                               out_port=ofp.OFPP_ANY, out_group=ofp.OFPG_ANY)\n        dp.send_msg(msg)\n\n    # ----------------------------------------------------------- counters\n    @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)\n    def on_flow_stats(self, ev):\n        dp = ev.msg.datapath\n        if dp.id != S1:\n            return\n        counts = {PRIMARY: 0, ALT: 0}\n        for st in ev.msg.body:\n            if st.match.get('ipv4_dst') != H2_IP:\n                continue\n            if st.priority == PRIO_BASE:\n                counts[PRIMARY] = st.packet_count\n            elif st.priority == PRIO_REROUTE:\n                counts[ALT] = st.packet_count\n        for path in (PRIMARY, ALT):\n            c, last = counts[path], self.flow_last[path]\n            # a counter that went down means the flow was deleted and re-added\n            self.sent[path] += c - last if c >= last else c\n            self.flow_last[path] = c\n\n    def report_listener(self):\n        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)\n        sock.bind(('0.0.0.0', REPORT_PORT))\n        sock.settimeout(0.5)\n        while True:\n            try:\n                data, _ = sock.recvfrom(4096)\n            except socket.timeout:\n                hub.sleep(0)\n                continue\n            try:\n                rep = json.loads(data.decode())\n            except ValueError:\n                continue\n            for path, key in ((PRIMARY, str(DSCP[PRIMARY])), (ALT, str(DSCP[ALT]))):\n                self.rx[path] = int(rep['rx'].get(key, 0))\n                self.probe_rx[path] = int(rep['probe'].get(key, 0))\n\n    # ----------------------------------------------------------- probes\n    def send_probe(self, path):\n        dp = self.dps.get(S1)\n        if dp is None:\n            return\n        p, ofp = dp.ofproto_parser, dp.ofproto\n        pkt = packet.Packet()\n        pkt.add_protocol(ethernet.ethernet(dst=H2_MAC, src=CTL_MAC, ethertype=0x0800))\n        pkt.add_protocol(ipv4.ipv4(src=CTL_IP, dst=H2_IP, proto=17))\n        pkt.add_protocol(udp.udp(src_port=REPORT_PORT, dst_port=PROBE_PORT))\n        pkt.add_protocol(b'probe')\n        pkt.serialize()\n        actions = [p.OFPActionSetField(ip_dscp=DSCP[path]), p.OFPActionOutput(OUT[path])]\n        dp.send_msg(p.OFPPacketOut(datapath=dp, buffer_id=ofp.OFP_NO_BUFFER,\n                                   in_port=ofp.OFPP_CONTROLLER, actions=actions, data=pkt.data))\n        self.probe_sent[path] += 1\n\n    # ----------------------------------------------------------- monitor loop\n    def monitor_loop(self):\n        while True:\n            hub.sleep(POLL)\n            self.poll()\n\n    def poll(self):\n        dp = self.dps.get(S1)\n        if dp is not None:\n            p = dp.ofproto_parser\n            dp.send_msg(p.OFPFlowStatsRequest(datapath=dp, table_id=0, match=p.OFPMatch()))\n            self.send_probe(PRIMARY)\n            self.send_probe(ALT)\n        for path in (PRIMARY, ALT):\n            ds = self.sent[path] - self.prev['sent'][path]\n            dr = self.rx[path] - self.prev['rx'][path]\n            dps_ = self.probe_sent[path] - self.prev['psent'][path]\n            dpr = self.probe_rx[path] - self.prev['prx'][path]\n            self.prev['sent'][path] = self.sent[path]\n            self.prev['rx'][path] = self.rx[path]\n            self.prev['psent'][path] = self.probe_sent[path]\n            self.prev['prx'][path] = self.probe_rx[path]\n            self.hist[path] = (self.hist[path] + [(ds, dr)])[-(WINDOW + LAG):]\n            self.phist[path] = (self.phist[path] + [(dps_, dpr)])[-(PROBE_WINDOW + LAG):]\n        self.decide()\n\n    @staticmethod\n    def settled(hist, n):\n        \"\"\"The n polls that ended LAG polls ago, or None if not enough history yet.\"\"\"\n        if len(hist) < n + LAG:\n            return None\n        return hist[len(hist) - n - LAG:len(hist) - LAG]\n\n    def loss(self, path):\n        w = self.settled(self.hist[path], WINDOW)\n        if w is None:\n            return None\n        sent = sum(s for s, _ in w)\n        rx = sum(r for _, r in w)\n        if sent < MIN_SAMPLES:\n            return None\n        return max(0.0, 1.0 - rx / float(sent))\n\n    def healthy(self, path):\n        if self.link_down[path]:\n            return False\n        w = self.settled(self.phist[path], PROBE_WINDOW)\n        if w is None:\n            return True                  # not enough probes yet: assume healthy\n        sent = sum(s for s, _ in w)\n        rx = sum(r for _, r in w)\n        if sent < 4:\n            return True\n        return rx >= PROBE_OK * sent\n\n    def other(self, path):\n        return ALT if path == PRIMARY else PRIMARY\n\n    def decide(self):\n        cur = self.active\n        l_cur = self.loss(cur)\n        l_alt = self.loss(self.other(cur))\n        self.event('poll', loss_active=l_cur, loss_other=l_alt,\n                   probes_ok={k: self.healthy(k) for k in (PRIMARY, ALT)},\n                   counters={k: [self.sent[k], self.rx[k]] for k in (PRIMARY, ALT)})\n        if STATIC:\n            return\n        bad = l_cur is not None and l_cur > THRESH\n        self.bad_polls = self.bad_polls + 1 if bad else 0\n        if self.bad_polls == CONSEC:\n            self.event('degraded', path=cur, loss=l_cur)\n        if self.bad_polls >= CONSEC:\n            if self.healthy(self.other(cur)):\n                self.set_path(self.other(cur), 'loss')\n            else:\n                self.event('no_alternate', path=cur)\n                self.bad_polls = 0\n        elif (cur == ALT and time.time() - self.switched_at >= FAILBACK_AFTER\n              and self.settled(self.phist[PRIMARY], PROBE_WINDOW) is not None and self.healthy(PRIMARY)):\n            self.set_path(PRIMARY, 'failback')\n\n    # ----------------------------------------------------------- link events\n    @set_ev_cls(ofp_event.EventOFPPortStatus, MAIN_DISPATCHER)\n    def on_port_status(self, ev):\n        dp, desc = ev.msg.datapath, ev.msg.desc\n        if dp.id != S1 or desc.port_no not in (OUT[PRIMARY], OUT[ALT]):\n            return\n        path = PRIMARY if desc.port_no == OUT[PRIMARY] else ALT\n        down = bool(desc.state & ofproto_v1_3.OFPPS_LINK_DOWN)\n        self.link_down[path] = down\n        self.event('port_status', path=path, down=down)\n        if down and path == self.active and not STATIC:\n            self.event('degraded', path=path, loss=None, reason='port-status')\n            if self.healthy(self.other(path)):\n                self.set_path(self.other(path), 'port-status')\n            else:\n                self.event('no_alternate', path=path)\n\n    # ----------------------------------------------------------- reroute\n    def set_path(self, path, reason):\n        if path == self.active:\n            return\n        old = self.active\n        self.active = path\n        self.switched_at = time.time()\n        self.bad_polls = 0\n        self.hist[path] = []            # start a fresh loss window on the new path\n        self.event('reroute' if reason != 'failback' else 'failback',\n                   to=path, frm=old, reason=reason)\n        match_s1 = dict(eth_type=0x0800, ipv4_dst=H2_IP, ip_proto=17, udp_dst=DATA_PORT)\n        match_s4 = dict(eth_type=0x0800, ipv4_dst=H1_IP, ip_proto=17, udp_dst=ACK_PORT)\n        s1, s4 = self.dps.get(S1), self.dps.get(S4)\n        if s1 is not None:\n            if path == ALT:\n                p = s1.ofproto_parser\n                self.add_flow(s1, PRIO_REROUTE, match_s1,\n                              [p.OFPActionSetField(ip_dscp=DSCP[ALT]), p.OFPActionOutput(OUT[ALT])])\n            else:\n                self.add_flow(s1, PRIO_REROUTE, match_s1, None,\n                              command=s1.ofproto.OFPFC_DELETE_STRICT)\n        if s4 is not None:\n            if path == ALT:\n                p = s4.ofproto_parser\n                self.add_flow(s4, PRIO_REROUTE, match_s4, [p.OFPActionOutput(2)])   # ACKs via s3\n            else:\n                self.add_flow(s4, PRIO_REROUTE, match_s4, None,\n                              command=s4.ofproto.OFPFC_DELETE_STRICT)\n        self.event('flowmod_sent', to=path, switches=[S1, S4])\n"};
+  Object.keys(CODE).forEach(function (k) {
+    var pre = $('code-' + k); if (pre) pre.textContent = CODE[k];
+  });
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var text = CODE[this.getAttribute('data-copy')] || '';
+      var btn = this;
+      function ok() { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1400); }
+      function fail() { btn.textContent = 'Select text'; setTimeout(function () { btn.textContent = 'Copy'; }, 1800); }
+      try { navigator.clipboard.writeText(text).then(ok, fail); } catch (e) { fail(); }
+    });
+  });
+
+  /* ---------- boot ---------- */
+  renderCompare();
+  renderLog();
+  requestAnimationFrame(function (t) { lastFrame = t; frame(t); });
+  window.addEventListener('resize', function () { drawChart(); });
+})();
+</script>

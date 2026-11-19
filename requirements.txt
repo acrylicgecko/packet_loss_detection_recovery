@@ -1,0 +1,4 @@
+# Python packages (install with: pip3 install -r requirements.txt)
+os-ken
+# Mininet itself is installed from the system package manager, not pip:
+#   sudo apt install mininet openvswitch-switch iproute2 ethtool
